@@ -99,15 +99,34 @@ try {
   Write-Host ("Agent: " + $exe)
 
   if ($haveGit) {
-    Write-Step "Fetching the fleet repo (for later Update / git pull)"
-    if (Test-Path (Join-Path $repoDir ".git")) {
-      & git -C $repoDir pull --ff-only origin main 2>&1 | ForEach-Object { Write-Host ("   " + $_) }
-    } else {
-      if (Test-Path $repoDir) { Remove-Item -Recurse -Force $repoDir }
-      & git clone --depth 1 --branch main $Repo $repoDir 2>&1 | ForEach-Object { Write-Host ("   " + $_) }
+    Write-Step "Fetching the fleet repo (optional, for later Update)"
+    $oldEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $oldNative = $null
+    if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+      $oldNative = $PSNativeCommandUseErrorActionPreference
+      $PSNativeCommandUseErrorActionPreference = $false
     }
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-      Write-Host ("Git clone/pull failed (exit " + $LASTEXITCODE + "). Continuing with the agent anyway.")
+    try {
+      if (Test-Path (Join-Path $repoDir ".git")) {
+        Write-Host "Updating existing checkout..."
+        git -C $repoDir pull --ff-only origin main
+      } else {
+        if (Test-Path $repoDir) { Remove-Item -Recurse -Force $repoDir }
+        Write-Host ("Cloning " + $Repo)
+        git clone --depth 1 --branch main $Repo $repoDir
+      }
+      if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        Write-Host ("Git finished with exit " + $LASTEXITCODE + ". Continuing; the agent does not need this clone.")
+      } else {
+        Write-Host "Repo ready."
+      }
+    } catch {
+      Write-Host ("Git clone/pull skipped: " + $_.Exception.Message)
+      Write-Host "Continuing; the agent does not need this clone to run."
+    } finally {
+      $ErrorActionPreference = $oldEap
+      if ($null -ne $oldNative) { $PSNativeCommandUseErrorActionPreference = $oldNative }
     }
   }
 
