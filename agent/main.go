@@ -49,7 +49,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "startup install: %v\n", err)
 	}
 	if relocated {
-		fmt.Println("Installed to", filepath.Join(dataDir, "fleet-agent.exe"), "and registered at logon. Switching to that copy.")
+		fmt.Println("Installed to", filepath.Join(dataDir, "fleet-agent.exe"))
+		if err != nil {
+			fmt.Println("Logon registration note:", err)
+		} else {
+			fmt.Println("Registered to start at Windows logon.")
+		}
+		fmt.Println("Switching to that copy.")
 		os.Exit(0)
 	}
 

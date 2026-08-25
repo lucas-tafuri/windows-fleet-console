@@ -49,7 +49,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Server http://YOUR_CONSO
 
 `dist/install.cmd` sits next to `fleet-agent.exe` — double-click it and paste the server URL and token when asked.
 
-The agent is copied to `%LOCALAPPDATA%\FleetConsole` and starts at Windows logon.
+The agent is copied to `%LOCALAPPDATA%\FleetConsole` and starts at Windows logon (scheduled task if allowed, otherwise a Startup-folder shortcut). A missing scheduled task is a warning, not a failed install — if the script prints `SUCCESS` and `fleet-agent.exe` is in that folder, the PC is enrolled.
 
 ### Update every PC
 

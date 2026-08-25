@@ -27,36 +27,45 @@ func ensureInstalled() (relocated bool, err error) {
 	if !sameFile(self, dest) {
 		if copyErr := copyFile(self, dest); copyErr != nil {
 			exePath = self
-			_ = registerLogon(self)
-			return false, fmt.Errorf("copy to %s: %w (running from current path)", dest, copyErr)
+			regErr := registerLogon(self)
+			return false, fmt.Errorf("copy to %s: %w (running from current path); startup: %v", dest, copyErr, regErr)
 		}
-		_ = registerLogon(dest)
+		regErr := registerLogon(dest)
 		if startErr := startDetached(dest); startErr != nil {
 			exePath = dest
 			return false, startErr
 		}
-		return true, nil
+		return true, regErr
 	}
 
 	return false, registerLogon(dest)
 }
 
 func registerLogon(exe string) error {
-	tr := fmt.Sprintf(`"%s" --server %s --token %s --data-dir "%s"`, exe, agentCfg.Server, agentCfg.Token, dataDir)
-	if agentCfg.HTTPOnly {
-		tr += " --http-only"
-	}
-	cmd := exec.Command("schtasks", "/create", "/tn", taskName, "/tr", tr, "/sc", "onlogon", "/rl", "highest", "/f")
-	cmd.SysProcAttr = &windows.SysProcAttr{HideWindow: true}
-	out, err := cmd.CombinedOutput()
+	runner, runErr := writeRunnerCmd(exe)
 	startupErr := writeStartupCmd(exe)
-	if err != nil {
-		if startupErr != nil {
-			return fmt.Errorf("schtasks: %v (%s); startup folder: %w", err, strings.TrimSpace(string(out)), startupErr)
+
+	var taskErr error
+	if runErr == nil {
+		cmd := exec.Command("schtasks", "/create", "/tn", taskName, "/tr", `"`+runner+`"`, "/sc", "onlogon", "/f")
+		cmd.SysProcAttr = &windows.SysProcAttr{HideWindow: true}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			taskErr = fmt.Errorf("schtasks: %v (%s)", err, strings.TrimSpace(string(out)))
 		}
-		return nil
+	} else {
+		taskErr = runErr
 	}
-	return startupErr
+
+	if taskErr != nil && startupErr != nil {
+		return fmt.Errorf("%v; startup folder: %w", taskErr, startupErr)
+	}
+	return nil
+}
+
+func writeRunnerCmd(exe string) (string, error) {
+	path := filepath.Join(dataDir, "run-agent.cmd")
+	return path, os.WriteFile(path, []byte(launcherCmd(exe)), 0o644)
 }
 
 func writeStartupCmd(exe string) error {
@@ -65,11 +74,16 @@ func writeStartupCmd(exe string) error {
 		return fmt.Errorf("APPDATA unset")
 	}
 	dir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
-	_ = os.MkdirAll(dir, 0o755)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
 	script := filepath.Join(dir, "FleetConsole.cmd")
-	body := fmt.Sprintf("@echo off\r\nstart \"\" \"%s\" --server %s --token %s --data-dir \"%s\"%s\r\n",
+	return os.WriteFile(script, []byte(launcherCmd(exe)), 0o644)
+}
+
+func launcherCmd(exe string) string {
+	return fmt.Sprintf("@echo off\r\nstart \"\" \"%s\" --server %s --token %s --data-dir \"%s\"%s\r\n",
 		exe, agentCfg.Server, agentCfg.Token, dataDir, httpOnlyFlag())
-	return os.WriteFile(script, []byte(body), 0o644)
 }
 
 func httpOnlyFlag() string {

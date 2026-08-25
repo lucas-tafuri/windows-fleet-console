@@ -141,22 +141,37 @@ try {
   Start-Sleep -Seconds 2
   $running = Get-Process -Name "fleet-agent" -ErrorAction SilentlyContinue
   $installed = Join-Path $installRoot "fleet-agent.exe"
-  $task = schtasks /query /tn "Fleet Console Agent" 2>$null
+  $startupCmd = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup\FleetConsole.cmd"
+  $runnerCmd = Join-Path $installRoot "run-agent.cmd"
+  $taskOk = $false
+  # Query via cmd.exe so a missing task never becomes a terminating PowerShell error.
+  # (schtasks prints "The system cannot find the file specified" when the task is absent.)
+  cmd.exe /c 'schtasks /query /tn "Fleet Console Agent" 1>nul 2>nul'
+  if ($LASTEXITCODE -eq 0) { $taskOk = $true }
 
   Write-Host ""
-  if ($running) {
-    Write-Host "SUCCESS - fleet-agent is running." -ForegroundColor Green
+  if ($running -or (Test-Path $installed)) {
+    Write-Host "SUCCESS - the agent is installed." -ForegroundColor Green
+    if ($running) {
+      Write-Host "fleet-agent.exe is running now."
+    } else {
+      Write-Host "The exe is in place. If you do not see it in Task Manager, start:"
+      Write-Host ("  " + $installed)
+    }
   } else {
-    Write-Host "The agent process is not visible yet." -ForegroundColor Yellow
-    Write-Host "Check Task Manager for fleet-agent.exe, or run the exe again."
+    Write-Host "The agent exe was not found in LocalAppData." -ForegroundColor Yellow
   }
   Write-Host ("  install folder : " + $installRoot)
   if (Test-Path $installed) { Write-Host ("  installed exe  : " + $installed) }
   Write-Host ("  server         : " + $Server)
-  if ($task) {
-    Write-Host "  logon task     : Fleet Console Agent (registered)"
+  if ($taskOk) {
+    Write-Host "  logon task     : Fleet Console Agent"
+  } elseif (Test-Path $startupCmd) {
+    Write-Host ("  logon startup  : " + $startupCmd)
+  } elseif (Test-Path $runnerCmd) {
+    Write-Host ("  runner         : " + $runnerCmd)
   } else {
-    Write-Host "  logon task     : not listed yet (Startup folder fallback may still apply)"
+    Write-Host "  logon          : not confirmed (you can still start the exe by hand)"
   }
   Write-Host "It should start again the next time this user signs in."
 }
