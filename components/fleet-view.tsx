@@ -122,7 +122,7 @@ export function FleetView() {
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-auto px-4 pb-28 md:px-6">
+        <div className="min-h-0 flex-1 overflow-auto px-4 pb-8 md:px-6">
           {loading ? (
             <EmptyState title="Listening for machines">
               Heartbeats arrive every few seconds.
@@ -205,8 +205,10 @@ export function FleetView() {
 
         <div
           className={cn(
-            "sticky bottom-16 z-20 border-t border-white/8 bg-[#161410]/95 px-3 py-2 backdrop-blur-md transition-transform duration-200 ease-out md:bottom-0 md:px-6",
-            selected.length === 0 ? "translate-y-4 opacity-0 pointer-events-none" : "opacity-100"
+            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-[#161410]/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6 lg:right-80",
+            selected.length === 0
+              ? "pointer-events-none translate-y-4 opacity-0"
+              : "opacity-100"
           )}
         >
           <div className="flex flex-wrap items-center gap-2">
