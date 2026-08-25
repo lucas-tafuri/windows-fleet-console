@@ -47,3 +47,4 @@ next-env.d.ts
 !/dist/fleet-agent.exe
 !/dist/install.ps1
 !/dist/install.cmd
+!/dist/open-install-log.cmd
