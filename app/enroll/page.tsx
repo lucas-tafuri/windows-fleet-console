@@ -9,6 +9,7 @@ type EnrollInfo = {
   command: string;
   pollFallback: string;
   scheduledTask: string;
+  repo?: string;
 };
 
 export default function EnrollPage() {
@@ -41,9 +42,13 @@ export default function EnrollPage() {
       </p>
       <h2 className="mt-1 text-2xl font-medium tracking-tight">Enroll a PC</h2>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Copy the Windows agent onto a machine you own, then run it in the
-        signed-in user session. The agent phones home — no inbound ports on the
-        PC. WebSocket is preferred; HTTP poll is the automatic fallback.
+        Copy the Windows agent onto a machine you own, then run it once in the
+        signed-in user session. The first launch copies itself to{" "}
+        <span className="font-mono text-foreground/80">
+          %LOCALAPPDATA%\FleetConsole
+        </span>{" "}
+        and registers at Windows logon. After that it phones home on every
+        sign-in — no inbound ports on the PC.
       </p>
 
       {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
@@ -69,18 +74,15 @@ export default function EnrollPage() {
             <p>Loading command…</p>
           )}
         </Step>
-        <Step n="03" title="Stay logged on (preferred)">
-          Create a logon scheduled task so the agent maps drives and launches
-          apps for the person at the keyboard:
+        <Step n="03" title="Startup is automatic">
+          The first successful launch creates a logon scheduled task (highest
+          privileges) and a Startup-folder fallback. You do not need to run
+          schtasks yourself.
           {info ? (
-            <CopyBlock
-              value={info.scheduledTask}
-              copied={copied === "task"}
-              onCopy={() => copy("task", info.scheduledTask)}
-            />
+            <p className="mt-2 font-mono text-[11px] text-foreground/80">
+              {info.scheduledTask}
+            </p>
           ) : null}
-          If Task Scheduler is blocked, just leave the exe running, or pin a
-          shortcut to the Start Menu.
         </Step>
         <Step n="04" title="HTTP-only networks">
           If a proxy eats WebSockets:

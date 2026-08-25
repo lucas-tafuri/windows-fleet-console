@@ -14,15 +14,10 @@ func main() {
 	server := flag.String("server", "", "Fleet Console URL, e.g. http://192.168.1.10:43123")
 	token := flag.String("token", "", "Fleet token from the Enroll page")
 	httpOnly := flag.Bool("http-only", false, "Skip WebSocket and use HTTP poll only")
-	dataDir := flag.String("data-dir", "", "Directory for machine-id (default: %LOCALAPPDATA%\\FleetConsole)")
+	dataDirFlag := flag.String("data-dir", "", "Directory for machine-id and install (default: %LOCALAPPDATA%\\FleetConsole)")
 	flag.Parse()
 
-	if *server == "" || *token == "" {
-		fmt.Fprintln(os.Stderr, "usage: fleet-agent.exe --server http://host:43123 --token <token>")
-		os.Exit(2)
-	}
-
-	dir := *dataDir
+	dir := *dataDirFlag
 	if dir == "" {
 		base, err := os.UserCacheDir()
 		if err != nil {
@@ -30,23 +25,54 @@ func main() {
 		}
 		dir = filepath.Join(base, "FleetConsole")
 	}
-	_ = os.MkdirAll(dir, 0o755)
-	idPath := filepath.Join(dir, "machine-id")
+	dataDir = dir
+	_ = os.MkdirAll(dataDir, 0o755)
 
+	agentCfg = loadConfig()
+	if *server != "" {
+		agentCfg.Server = trimSlash(*server)
+	}
+	if *token != "" {
+		agentCfg.Token = *token
+	}
+	if *httpOnly {
+		agentCfg.HTTPOnly = true
+	}
+	if agentCfg.Server == "" || agentCfg.Token == "" {
+		fmt.Fprintln(os.Stderr, "usage: fleet-agent.exe --server http://host:43123 --token <token>")
+		os.Exit(2)
+	}
+	saveConfig(agentCfg)
+
+	relocated, err := ensureInstalled()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "startup install: %v\n", err)
+	}
+	if relocated {
+		fmt.Println("Installed to", filepath.Join(dataDir, "fleet-agent.exe"), "and registered at logon. Switching to that copy.")
+		os.Exit(0)
+	}
+
+	idPath := filepath.Join(dataDir, "machine-id")
 	id, _ := os.ReadFile(idPath)
 	machineID := string(bytesTrim(id))
+	if machineID == "" {
+		machineID = agentCfg.MachineID
+	}
 
 	client := &Client{
-		Server:    trimSlash(*server),
-		Token:     *token,
-		HTTPOnly:  *httpOnly,
+		Server:    agentCfg.Server,
+		Token:     agentCfg.Token,
+		HTTPOnly:  agentCfg.HTTPOnly,
 		MachineID: machineID,
 		OnID: func(id string) {
 			_ = os.WriteFile(idPath, []byte(id), 0o600)
+			agentCfg.MachineID = id
+			saveConfig(agentCfg)
 		},
 	}
 
-	fmt.Printf("Fleet agent → %s (ws=%v)\n", client.Server, !*httpOnly)
+	fmt.Printf("Fleet agent → %s (ws=%v) install=%s\n", client.Server, !client.HTTPOnly, dataDir)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

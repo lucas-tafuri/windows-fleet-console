@@ -9,4 +9,5 @@ export const JOB_LABEL: Record<JobKind, string> = {
   clean_downloads: "Clean Downloads",
   empty_recycle: "Empty Recycle Bin",
   launch: "Launch",
+  self_update: "Update & restart",
 };

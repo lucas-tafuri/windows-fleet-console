@@ -28,6 +28,8 @@ func runJob(job AssignedJob) JobResult {
 		return emptyRecycle(job.ID)
 	case "launch":
 		return launchProgram(job.ID, target, args)
+	case "self_update":
+		return selfUpdate(job.ID, payloadString(job.Payload, "repo"), payloadString(job.Payload, "branch"))
 	default:
 		return JobResult{JobID: job.ID, Status: "error", Message: "unknown job kind " + job.Kind}
 	}

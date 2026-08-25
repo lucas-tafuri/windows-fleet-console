@@ -53,13 +53,17 @@ Or clone the repo and copy `dist\fleet-agent.exe`. Then run the command from the
 .\fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN
 ```
 
-Keep it in the **signed-in user session** (logon scheduled task with highest privileges, or a Start Menu shortcut). That is how mapped drives, launching apps, Downloads, and Recycle Bin hit the person at the keyboard. Software install needs that user to be an administrator.
+The first launch copies the exe to `%LOCALAPPDATA%\FleetConsole`, writes `config.json`, and registers a **logon scheduled task** (highest privileges) plus a Startup-folder `.cmd` fallback. After that the agent starts when the user signs in.
 
 HTTP-only fallback if a proxy eats WebSockets:
 
 ```text
 .\fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN --http-only
 ```
+
+### Update every PC
+
+In the console, select machines and click **Update**. Each agent `git pull`s [this repo](https://github.com/lucas-tafuri/windows-fleet-console) (or clones it / downloads `dist/fleet-agent.exe` if Git is missing), replaces the binary, and restarts.
 
 To rebuild the agent yourself (Go on any OS):
 

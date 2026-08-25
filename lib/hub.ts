@@ -74,7 +74,8 @@ export async function getEnrollInfo(hostHeader: string | null) {
     command: `fleet-agent.exe --server ${proto} --token ${store.fleetToken}`,
     pollFallback: `fleet-agent.exe --server ${proto} --token ${store.fleetToken} --http-only`,
     scheduledTask:
-      `schtasks /create /tn "Fleet Console Agent" /tr "%CD%\\fleet-agent.exe --server ${proto} --token ${store.fleetToken}" /sc onlogon /rl highest`,
+      "First run copies the agent to %LOCALAPPDATA%\\FleetConsole and registers a logon scheduled task (Startup folder fallback).",
+    repo: "https://github.com/lucas-tafuri/windows-fleet-console.git",
   };
 }
 

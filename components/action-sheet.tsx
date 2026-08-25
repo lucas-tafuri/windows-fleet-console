@@ -21,7 +21,8 @@ export type ActionKey =
   | "unmap"
   | "clean"
   | "recycle"
-  | "launch";
+  | "launch"
+  | "update";
 
 const LETTERS = "DEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -52,6 +53,10 @@ export function ActionSheet({
   const [password, setPassword] = useState("");
   const [target, setTarget] = useState("notepad.exe");
   const [args, setArgs] = useState("");
+  const [repo, setRepo] = useState(
+    "https://github.com/lucas-tafuri/windows-fleet-console.git"
+  );
+  const [branch, setBranch] = useState("main");
   const [error, setError] = useState<string | null>(null);
 
   const title =
@@ -67,7 +72,9 @@ export function ActionSheet({
               ? "Empty Recycle Bin"
               : action === "launch"
                 ? "Launch program"
-                : "Action";
+                : action === "update"
+                  ? "Update & restart"
+                  : "Action";
 
   async function run() {
     setError(null);
@@ -91,6 +98,11 @@ export function ActionSheet({
         await onSubmit("launch", {
           target: target.trim(),
           args: args.trim() || undefined,
+        });
+      } else if (action === "update") {
+        await onSubmit("self_update", {
+          repo: repo.trim(),
+          branch: branch.trim() || "main",
         });
       }
     } catch (err) {
@@ -219,6 +231,36 @@ export function ActionSheet({
                   className="font-mono"
                   value={args}
                   onChange={(e) => setArgs(e.target.value)}
+                />
+              </div>
+            </>
+          ) : null}
+
+          {action === "update" ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Each selected PC runs <span className="font-mono">git pull</span>{" "}
+                in its fleet checkout, replaces the agent, and restarts. If Git
+                is missing it clones or downloads{" "}
+                <span className="font-mono">fleet-agent.exe</span> from GitHub.
+                First run already registers the agent at Windows logon.
+              </p>
+              <div className="grid gap-2">
+                <Label htmlFor="repo">Git remote</Label>
+                <Input
+                  id="repo"
+                  className="font-mono"
+                  value={repo}
+                  onChange={(e) => setRepo(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="branch">Branch</Label>
+                <Input
+                  id="branch"
+                  className="font-mono"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
                 />
               </div>
             </>

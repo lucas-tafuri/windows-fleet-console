@@ -5,6 +5,7 @@ import {
   FolderDown,
   HardDrive,
   Package,
+  RefreshCw,
   Rocket,
   Trash2,
   Unplug,
@@ -221,6 +222,7 @@ export function FleetView() {
             <DockBtn icon={FolderDown} label="Downloads" onClick={() => setAction("clean")} />
             <DockBtn icon={Trash2} label="Recycle" onClick={() => setAction("recycle")} />
             <DockBtn icon={Rocket} label="Launch" onClick={() => setAction("launch")} />
+            <DockBtn icon={RefreshCw} label="Update" onClick={() => setAction("update")} />
             <Button
               variant="ghost"
               size="sm"

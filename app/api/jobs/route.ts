@@ -16,6 +16,7 @@ const KINDS = new Set<JobKind>([
   "clean_downloads",
   "empty_recycle",
   "launch",
+  "self_update",
 ]);
 
 export async function GET() {

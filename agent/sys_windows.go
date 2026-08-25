@@ -370,7 +370,7 @@ func mapDrive(jobID, letter, unc, user, pass string) JobResult {
 	if err2 := wnetAdd(spec, unc, user, pass); err2 == nil {
 		return JobResult{JobID: jobID, Status: "ok", Via: "WNetAddConnection2", Message: "Mapped " + spec + " to " + unc, Output: clip(out)}
 	} else {
-		return JobResult{JobID: jobID, Status: "error", Via: "net use", Message: "Map failed for " + spec, Output: clip(out+"\n"+err2.Error())}
+		return JobResult{JobID: jobID, Status: "error", Via: "net use", Message: "Map failed for " + spec, Output: clip(out + "\n" + err2.Error())}
 	}
 }
 
@@ -387,7 +387,7 @@ func unmapDrive(jobID, letter string) JobResult {
 	if err2 := wnetCancel(spec); err2 == nil {
 		return JobResult{JobID: jobID, Status: "ok", Via: "WNetCancelConnection2", Message: "Unmapped " + spec, Output: clip(out)}
 	} else {
-		return JobResult{JobID: jobID, Status: "error", Via: "net use", Message: "Unmap failed for " + spec, Output: clip(out+"\n"+err2.Error())}
+		return JobResult{JobID: jobID, Status: "error", Via: "net use", Message: "Unmap failed for " + spec, Output: clip(out + "\n" + err2.Error())}
 	}
 }
 
@@ -527,9 +527,9 @@ func isLocked(err error) bool {
 }
 
 const (
-	sherbNoconfirm  = 0x1
-	sherbNoprog     = 0x2
-	sherbNosound    = 0x4
+	sherbNoconfirm = 0x1
+	sherbNoprog    = 0x2
+	sherbNosound   = 0x4
 )
 
 func emptyRecycle(jobID string) JobResult {

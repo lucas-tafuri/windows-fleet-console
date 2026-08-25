@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -145,6 +146,35 @@ func (c *Client) pollOnce() error {
 		return fmt.Errorf("poll: %s", resp.Error)
 	}
 	c.apply(resp)
+	c.maybeRestart()
+	return nil
+}
+
+func (c *Client) maybeRestart() {
+	if !restartRequested {
+		return
+	}
+	restartRequested = false
+	_ = c.pollOnceNoRestart()
+	spawnRestart(c)
+	os.Exit(0)
+}
+
+func (c *Client) pollOnceNoRestart() error {
+	body, _ := json.Marshal(c.collect())
+	req, err := http.NewRequest(http.MethodPost, c.Server+"/api/agent/poll", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("x-agent-transport", "poll")
+	httpClient := &http.Client{Timeout: 20 * time.Second}
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	io.Copy(io.Discard, res.Body)
 	return nil
 }
 
@@ -191,6 +221,14 @@ func (c *Client) runWS() error {
 				return
 			}
 			c.apply(resp)
+			if restartRequested {
+				restartRequested = false
+				_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				b, _ := json.Marshal(c.collect())
+				_ = conn.WriteMessage(websocket.TextMessage, b)
+				spawnRestart(c)
+				os.Exit(0)
+			}
 		}
 	}()
 

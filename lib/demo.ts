@@ -183,6 +183,15 @@ export async function simulateDemoResult(job: Job, machine: Machine) {
     };
   }
 
+  if (kind === "self_update") {
+    return {
+      status: "ok" as const,
+      via: machine.hostname === "FRONT-DESK" ? "github download" : "git pull",
+      message: `Updated and restarting agent on ${machine.hostname}`,
+      output: `git pull origin main\nAlready registered at Windows logon.`,
+    };
+  }
+
   return {
     status: "ok" as const,
     via: "ShellExecute",

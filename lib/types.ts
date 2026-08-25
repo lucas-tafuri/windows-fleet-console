@@ -36,7 +36,8 @@ export type JobKind =
   | "unmap_drive"
   | "clean_downloads"
   | "empty_recycle"
-  | "launch";
+  | "launch"
+  | "self_update";
 
 export type JobResultStatus = "queued" | "running" | "ok" | "error";
 
@@ -59,6 +60,8 @@ export type JobPayload = {
   password?: string;
   target?: string;
   args?: string;
+  repo?: string;
+  branch?: string;
 };
 
 export type Job = {
