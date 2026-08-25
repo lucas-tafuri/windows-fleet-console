@@ -10,6 +10,7 @@ type EnrollInfo = {
   pollFallback: string;
   scheduledTask: string;
   repo?: string;
+  oneLiner?: string;
 };
 
 export default function EnrollPage() {
@@ -42,49 +43,50 @@ export default function EnrollPage() {
       </p>
       <h2 className="mt-1 text-2xl font-medium tracking-tight">Enroll a PC</h2>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Copy the Windows agent onto a machine you own, then run it once in the
-        signed-in user session. The first launch copies itself to{" "}
-        <span className="font-mono text-foreground/80">
-          %LOCALAPPDATA%\FleetConsole
-        </span>{" "}
-        and registers at Windows logon. After that it phones home on every
-        sign-in — no inbound ports on the PC.
+        Run the install script on a PC you own. It installs Git if needed,
+        downloads the agent, registers it at Windows logon, and starts it. The
+        agent phones home — no inbound ports on the PC.
       </p>
 
       {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
 
       <ol className="mt-8 grid gap-6">
-        <Step n="01" title="Build or copy the agent">
-          From this repo:{" "}
-          <code className="font-mono text-foreground/90">
-            ./scripts/build-agent.sh
-          </code>
-          . Place{" "}
-          <code className="font-mono text-foreground/90">fleet-agent.exe</code>{" "}
-          on the PC.
-        </Step>
-        <Step n="02" title="Run it once">
+        <Step n="01" title="Run the install script on the PC">
+          From PowerShell (admin not required). Installs Git if missing, fetches
+          the agent, registers it at Windows logon, and starts it:
+          {info?.oneLiner ? (
+            <CopyBlock
+              value={info.oneLiner}
+              copied={copied === "one"}
+              onCopy={() => copy("one", info.oneLiner!)}
+            />
+          ) : (
+            <p>Loading command…</p>
+          )}
+          If you already copied{" "}
+          <code className="font-mono text-foreground/90">dist\\install.cmd</code>{" "}
+          next to the exe, double-click it or:
           {info ? (
             <CopyBlock
               value={info.command}
               copied={copied === "run"}
               onCopy={() => copy("run", info.command)}
             />
-          ) : (
-            <p>Loading command…</p>
-          )}
+          ) : null}
         </Step>
-        <Step n="03" title="Startup is automatic">
-          The first successful launch creates a logon scheduled task (highest
-          privileges) and a Startup-folder fallback. You do not need to run
-          schtasks yourself.
+        <Step n="02" title="Startup is automatic">
+          The script (and the first agent launch) copies the exe to{" "}
+          <span className="font-mono text-foreground/80">
+            %LOCALAPPDATA%\FleetConsole
+          </span>{" "}
+          and registers a logon scheduled task, with a Startup-folder fallback.
           {info ? (
             <p className="mt-2 font-mono text-[11px] text-foreground/80">
               {info.scheduledTask}
             </p>
           ) : null}
         </Step>
-        <Step n="04" title="HTTP-only networks">
+        <Step n="03" title="HTTP-only networks">
           If a proxy eats WebSockets:
           {info ? (
             <CopyBlock

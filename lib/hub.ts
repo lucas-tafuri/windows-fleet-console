@@ -71,11 +71,12 @@ export async function getEnrollInfo(hostHeader: string | null) {
   return {
     token: store.fleetToken,
     serverUrl: proto,
-    command: `fleet-agent.exe --server ${proto} --token ${store.fleetToken}`,
-    pollFallback: `fleet-agent.exe --server ${proto} --token ${store.fleetToken} --http-only`,
+    command: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Server ${proto} -Token ${store.fleetToken}`,
+    pollFallback: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Server ${proto} -Token ${store.fleetToken} -HttpOnly`,
     scheduledTask:
-      "First run copies the agent to %LOCALAPPDATA%\\FleetConsole and registers a logon scheduled task (Startup folder fallback).",
+      "install.ps1 / install.cmd copies the agent to %LOCALAPPDATA%\\FleetConsole and registers a logon task (Startup folder fallback).",
     repo: "https://github.com/lucas-tafuri/windows-fleet-console.git",
+    oneLiner: `powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile $env:TEMP\\fleet-install.ps1; & $env:TEMP\\fleet-install.ps1 -Server '${proto}' -Token '${store.fleetToken}'"`,
   };
 }
 

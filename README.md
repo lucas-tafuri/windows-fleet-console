@@ -13,11 +13,10 @@ On the machine that will host the dashboard (any OS with Node 20+):
 ```bash
 git clone https://github.com/lucas-tafuri/windows-fleet-console.git
 cd windows-fleet-console
-npm install
-npm run dev
+./install.sh
 ```
 
-Opens on [http://127.0.0.1:43123](http://127.0.0.1:43123). Until a real agent connects, three simulated PCs are shown so every action can be tried.
+That installs npm dependencies and starts the console on [http://127.0.0.1:43123](http://127.0.0.1:43123). Until a real agent connects, three simulated PCs are shown so every action can be tried.
 
 ```bash
 npm run build
@@ -41,25 +40,16 @@ State lives in `data/fleet.json` (atomic writes, no database).
 
 ## Enroll a Windows PC
 
-Prebuilt agent is in [`dist/fleet-agent.exe`](https://github.com/lucas-tafuri/windows-fleet-console/raw/main/dist/fleet-agent.exe) (~5 MB). On each PC, in PowerShell:
+On each PC, run the install script (Git via winget if missing, agent download, logon registration, start). From the Enroll page copy the one-liner, or:
 
 ```powershell
-Invoke-WebRequest -Uri https://github.com/lucas-tafuri/windows-fleet-console/raw/main/dist/fleet-agent.exe -OutFile fleet-agent.exe
+iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Server http://YOUR_CONSOLE:43123 -Token YOUR_TOKEN
 ```
 
-Or clone the repo and copy `dist\fleet-agent.exe`. Then run the command from the Enroll page (server URL + token):
+`dist/install.cmd` sits next to `fleet-agent.exe` — double-click it and paste the server URL and token when asked.
 
-```text
-.\fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN
-```
-
-The first launch copies the exe to `%LOCALAPPDATA%\FleetConsole`, writes `config.json`, and registers a **logon scheduled task** (highest privileges) plus a Startup-folder `.cmd` fallback. After that the agent starts when the user signs in.
-
-HTTP-only fallback if a proxy eats WebSockets:
-
-```text
-.\fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN --http-only
-```
+The agent is copied to `%LOCALAPPDATA%\FleetConsole` and starts at Windows logon.
 
 ### Update every PC
 
