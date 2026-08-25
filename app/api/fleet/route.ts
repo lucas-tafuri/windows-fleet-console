@@ -12,6 +12,8 @@ export async function GET() {
     return NextResponse.json({
       machines: [],
       jobs: [],
+      software: [],
+      softwareStatus: {},
       demoActive: snapshot.demoActive,
       pinRequired: true,
       unlocked: false,

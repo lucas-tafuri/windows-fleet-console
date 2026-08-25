@@ -45,6 +45,8 @@ next-env.d.ts
 /data/*.json
 /dist/*
 !/dist/fleet-agent.exe
+!/dist/fleet-console.exe
 !/dist/install.ps1
 !/dist/install.cmd
+!/dist/install-host.ps1
 !/dist/open-install-log.cmd

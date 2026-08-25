@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createJob } from "@/lib/hub";
+import { clearJobs, createJob } from "@/lib/hub";
 import { isUnlocked, pinRequired } from "@/lib/auth";
 import { getStore } from "@/lib/store";
 import type { JobKind, JobPayload } from "@/lib/types";
@@ -55,4 +55,12 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+}
+
+export async function DELETE() {
+  if (pinRequired() && !(await isUnlocked())) {
+    return NextResponse.json({ error: "PIN required" }, { status: 401 });
+  }
+  await clearJobs();
+  return NextResponse.json({ ok: true });
 }

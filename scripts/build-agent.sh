@@ -6,7 +6,7 @@ mkdir -p "$root/dist"
 export CGO_ENABLED=0
 export GOOS=windows
 export GOARCH=amd64
-go build -trimpath -ldflags="-s -w" -o "$root/dist/fleet-agent.exe" .
+go build -trimpath -ldflags="-s -w -H windowsgui" -o "$root/dist/fleet-agent.exe" .
 echo "wrote $root/dist/fleet-agent.exe"
 if [[ -f "$root/dist/install.ps1" ]]; then
   echo "client install script: $root/dist/install.ps1 (and install.cmd)"

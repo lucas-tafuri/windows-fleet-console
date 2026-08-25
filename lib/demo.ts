@@ -40,7 +40,7 @@ export const DEMO_MACHINES: Machine[] = [
     lastSeen: Date.now(),
     cpu: 6,
     memory: 58,
-    frozenHint: true,
+    frozenHint: false,
     metricsLimited: false,
     lastInputAgeMs: 180_000,
     mappedDrives: [{ letter: "Z", path: "\\\\files\\shared" }],
@@ -78,7 +78,7 @@ export function tickDemoMachines(store: StoreData): void {
     } else if (machine.id === "demo-front") {
       machine.cpu = 4 + Math.round(Math.random() * 5);
       machine.memory = 55 + Math.round(Math.random() * 6);
-      machine.frozenHint = true;
+      machine.frozenHint = false;
     }
   }
 }
@@ -94,6 +94,16 @@ function installedStory(hostname: string, pkg: string) {
   }
   if (hostname === "STUDIO-01" && (needle.includes("chrome") || needle.includes("notepad"))) {
     return true;
+  }
+  if (hostname === "STUDIO-01") {
+    return (
+      needle.includes("after effects") ||
+      needle.includes("photoshop") ||
+      needle.includes("creative cloud")
+    );
+  }
+  if (hostname === "LAB-04") {
+    return needle.includes("maxon") || needle.includes("cinema 4d");
   }
   return false;
 }

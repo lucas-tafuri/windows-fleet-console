@@ -263,6 +263,7 @@ export function FleetView() {
         selectedCount={selected.length}
         busy={busy}
         lastJob={liveJob}
+        software={data.software || []}
         onSubmit={onSubmit}
       />
     </div>
