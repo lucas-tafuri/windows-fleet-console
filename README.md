@@ -4,9 +4,15 @@ A lightweight control plane for Windows PCs you own. The web UI shows live statu
 
 The dashboard is one Node process. Each PC runs a small Go agent that **phones home** (no inbound ports on the machines).
 
+**Public repo:** [github.com/lucas-tafuri/windows-fleet-console](https://github.com/lucas-tafuri/windows-fleet-console)
+
 ## Run the console
 
+On the machine that will host the dashboard (any OS with Node 20+):
+
 ```bash
+git clone https://github.com/lucas-tafuri/windows-fleet-console.git
+cd windows-fleet-console
 npm install
 npm run dev
 ```
@@ -17,6 +23,8 @@ Opens on [http://127.0.0.1:43123](http://127.0.0.1:43123). Until a real agent co
 npm run build
 npm start
 ```
+
+The console must be reachable from your Windows PCs (LAN IP, VPN, or a VPS). Set `FLEET_PUBLIC_URL` to that address so Enroll copies the right command.
 
 Optional env (unset is fine — first run generates a fleet token and stays unlocked):
 
@@ -33,26 +41,30 @@ State lives in `data/fleet.json` (atomic writes, no database).
 
 ## Enroll a Windows PC
 
-1. Build the agent (from Linux/macOS/Windows with Go):
+Prebuilt agent is in [`dist/fleet-agent.exe`](https://github.com/lucas-tafuri/windows-fleet-console/raw/main/dist/fleet-agent.exe) (~5 MB). On each PC, in PowerShell:
 
-   ```bash
-   npm run build:agent
-   ```
+```powershell
+Invoke-WebRequest -Uri https://github.com/lucas-tafuri/windows-fleet-console/raw/main/dist/fleet-agent.exe -OutFile fleet-agent.exe
+```
 
-   Output: `dist/fleet-agent.exe` (~5 MB, `CGO_ENABLED=0`).
+Or clone the repo and copy `dist\fleet-agent.exe`. Then run the command from the Enroll page (server URL + token):
 
-2. Copy the exe to the PC. On the Enroll page, copy the run command:
+```text
+.\fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN
+```
 
-   ```text
-   fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN
-   ```
-
-3. Keep it in the **signed-in user session** (logon scheduled task with highest privileges, or a Start Menu shortcut). That is how mapped drives, launching apps, Downloads, and Recycle Bin hit the person at the keyboard. Software install needs that user to be an administrator.
+Keep it in the **signed-in user session** (logon scheduled task with highest privileges, or a Start Menu shortcut). That is how mapped drives, launching apps, Downloads, and Recycle Bin hit the person at the keyboard. Software install needs that user to be an administrator.
 
 HTTP-only fallback if a proxy eats WebSockets:
 
 ```text
-fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN --http-only
+.\fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN --http-only
+```
+
+To rebuild the agent yourself (Go on any OS):
+
+```bash
+npm run build:agent
 ```
 
 ## Fallbacks

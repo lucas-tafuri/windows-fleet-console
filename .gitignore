@@ -43,5 +43,5 @@ next-env.d.ts
 
 # fleet
 /data/*.json
-/dist/
-*.exe
+/dist/*
+!/dist/fleet-agent.exe
