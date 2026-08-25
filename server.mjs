@@ -104,7 +104,7 @@ setInterval(() => {
 }, 2000);
 
 server.listen(port, hostname, () => {
-  console.log(`Fleet Console on http://${hostname}:${port}`);
+  console.log(`PrettyDamnFleet on http://${hostname}:${port}`);
   startDiscovery();
 });
 

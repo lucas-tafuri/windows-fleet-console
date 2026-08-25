@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fleet Console — install dependencies and start the dashboard.
+# PrettyDamnFleet — install dependencies and start the dashboard.
 set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
 cd "$root"
@@ -26,5 +26,5 @@ if [[ ! -f dist/fleet-console.exe ]] && command -v go >/dev/null 2>&1; then
   bash -lc 'cd host && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H windowsgui" -o ../dist/fleet-console.exe .' || true
 fi
 
-echo ">> starting Fleet Console on :43123"
+echo ">> starting PrettyDamnFleet on :43123"
 exec npm run dev

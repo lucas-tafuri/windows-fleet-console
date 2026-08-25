@@ -15,7 +15,7 @@ const (
 
 func serveTray(c *Client) {
 	err := wintray.Run(wintray.Config{
-		Tooltip: "Fleet Agent",
+		Tooltip: "PrettyDamnFleet Agent",
 		Items: []wintray.Item{
 			{ID: trayUpdateID, Title: "Update"},
 			{ID: trayCloseID, Title: "Close"},

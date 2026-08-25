@@ -137,12 +137,21 @@ export type JoinRequest = {
   decidedAt?: number;
 };
 
+export type MapPrefs = {
+  letter: string;
+  unc: string;
+  username: string;
+  password: string;
+  uncHistory: string[];
+};
+
 export type FleetSnapshot = {
   machines: MachineView[];
   jobs: Job[];
   software: CatalogApp[];
   softwareStatus: SoftwareStatusMap;
   pendingJoins: JoinRequest[];
+  mapPrefs: MapPrefs;
   demoActive: boolean;
   pinRequired: boolean;
   unlocked: boolean;
@@ -157,4 +166,5 @@ export type StoreData = {
   software: CatalogApp[];
   softwareStatus: SoftwareStatusMap;
   joins: JoinRequest[];
+  mapPrefs: MapPrefs;
 };

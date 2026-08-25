@@ -1,4 +1,4 @@
-# Fleet Console
+# PrettyDamnFleet
 
 A lightweight control plane for Windows PCs you own. The web UI shows live status (online, under load, frozen, offline) and runs bulk jobs: install/uninstall/check software, map/unmap drives, clean Downloads, empty the Recycle Bin, and launch a program.
 

@@ -347,8 +347,14 @@ func mapDrive(jobID, letter, unc, user, pass string) JobResult {
 	if letter == "" || unc == "" {
 		return JobResult{JobID: jobID, Status: "error", Message: "drive letter and UNC path are required"}
 	}
-	letter = strings.TrimSuffix(letter, ":")
+	letter = strings.ToUpper(strings.TrimSuffix(letter, ":"))
 	spec := letter + ":"
+	unc = strings.TrimSpace(unc)
+
+	if skip, via, msg, out := alreadyMapped(letter, unc); skip {
+		return JobResult{JobID: jobID, Status: "ok", Via: via, Message: msg, Output: out}
+	}
+
 	args := []string{"use", spec, unc, "/persistent:no"}
 	if user != "" {
 		args = append(args, "/user:"+user)
@@ -365,6 +371,34 @@ func mapDrive(jobID, letter, unc, user, pass string) JobResult {
 	} else {
 		return JobResult{JobID: jobID, Status: "error", Via: "net use", Message: "Map failed for " + spec, Output: clip(out + "\n" + err2.Error())}
 	}
+}
+
+func alreadyMapped(letter, unc string) (bool, string, string, string) {
+	spec := letter + ":"
+	want := normalizeUNC(unc)
+	drives := listDrives()
+	for _, d := range drives {
+		if strings.EqualFold(d.Letter, letter) {
+			have := normalizeUNC(d.Path)
+			if have == want {
+				return true, "already mapped", "Already mapped " + spec + " to " + d.Path + "; skipped", d.Path
+			}
+			return true, "already mapped", "Already mapped " + spec + " to " + d.Path + "; left unchanged", d.Path
+		}
+	}
+	for _, d := range drives {
+		if normalizeUNC(d.Path) == want && want != "" {
+			return true, "already mapped", "Already mapped " + d.Letter + ": to " + d.Path + "; skipped", d.Path
+		}
+	}
+	return false, "", "", ""
+}
+
+func normalizeUNC(p string) string {
+	s := strings.TrimSpace(p)
+	s = strings.ReplaceAll(s, "/", `\`)
+	s = strings.TrimRight(s, `\`)
+	return strings.ToLower(s)
 }
 
 func unmapDrive(jobID, letter string) JobResult {

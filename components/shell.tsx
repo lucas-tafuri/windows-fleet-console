@@ -20,10 +20,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-full flex-col md:flex-row">
       <aside className="hidden border-r border-white/8 bg-sidebar md:flex md:w-52 md:flex-col">
         <div className="px-5 pt-6 pb-4">
-          <p className="font-mono text-[10px] tracking-[0.28em] text-primary uppercase">
-            Fleet
-          </p>
-          <h1 className="mt-1 text-lg font-medium tracking-tight">Console</h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/pds-logo.png"
+            alt=""
+            width={130}
+            height={237}
+            className="h-12 w-auto"
+          />
+          <h1 className="mt-3 text-[15px] font-medium tracking-tight">
+            PrettyDamnFleet
+          </h1>
           <p className="mt-1 text-xs text-muted-foreground">Windows ops</p>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
@@ -61,7 +68,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <JoinPrompt />
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/8 bg-[#161410]/95 backdrop-blur-md md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/8 bg-sidebar/95 backdrop-blur-md md:hidden">
         {NAV.map((item) => {
           const active =
             item.href === "/"

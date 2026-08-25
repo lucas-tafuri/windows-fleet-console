@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    service: "fleet-console",
+    service: "prettydamnfleet",
     port: parseInt(process.env.PORT || "43123", 10),
   });
 }

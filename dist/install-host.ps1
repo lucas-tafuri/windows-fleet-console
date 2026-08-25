@@ -1,4 +1,4 @@
-# Fleet Console - host install (ASCII only; Windows PowerShell 5.1)
+# PrettyDamnFleet - host install (ASCII only; Windows PowerShell 5.1)
 # Installs Node deps if needed, builds the tray host when Go is present,
 # registers logon startup, and starts the dashboard in the tray.
 #
@@ -26,7 +26,7 @@ function Write-Step([string]$Message) {
 }
 
 try {
-  Write-Host "Fleet Console host installer" -ForegroundColor Cyan
+  Write-Host "PrettyDamnFleet host installer" -ForegroundColor Cyan
   Write-Host ("Root: " + $root)
 
   Refresh-Path
@@ -57,7 +57,7 @@ try {
     throw "dist\fleet-console.exe was not built."
   }
 
-  Write-Step "Starting Fleet Console tray host"
+  Write-Step "Starting PrettyDamnFleet tray host"
   $running = Get-CimInstance Win32_Process -Filter "Name='fleet-console.exe'" -ErrorAction SilentlyContinue
   if ($running) {
     Write-Host "Stopping existing fleet-console.exe..."
@@ -73,7 +73,7 @@ try {
     Start-Sleep -Seconds 1
   }
   Start-Process -FilePath $exe
-  Write-Host "Started. Look for the Fleet Console icon in the notification area."
+  Write-Host "Started. Look for the PrettyDamnFleet icon in the notification area."
   Write-Host "Dashboard: http://127.0.0.1:43123"
   Write-Host "SUCCESS" -ForegroundColor Green
 } catch {

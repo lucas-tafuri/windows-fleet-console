@@ -206,7 +206,7 @@ export function FleetView() {
 
         <div
           className={cn(
-            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-[#161410]/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6 lg:right-80",
+            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-sidebar/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6 lg:right-80",
             selected.length === 0
               ? "pointer-events-none translate-y-4 opacity-0"
               : "opacity-100"
@@ -264,6 +264,7 @@ export function FleetView() {
         busy={busy}
         lastJob={liveJob}
         software={data.software || []}
+        mapPrefs={data.mapPrefs}
         onSubmit={onSubmit}
       />
     </div>

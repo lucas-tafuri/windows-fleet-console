@@ -15,6 +15,13 @@ export async function GET() {
       software: [],
       softwareStatus: {},
       pendingJoins: [],
+      mapPrefs: {
+        letter: "Z",
+        unc: "",
+        username: "",
+        password: "",
+        uncHistory: [],
+      },
       demoActive: snapshot.demoActive,
       pinRequired: true,
       unlocked: false,

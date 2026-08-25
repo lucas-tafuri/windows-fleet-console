@@ -1,9 +1,9 @@
 @echo off
-title Fleet Console installer
+title PrettyDamnFleet installer
 cd /d "%~dp0"
 echo.
 echo ========================================
-echo  Fleet Console - Windows client install
+echo  PrettyDamnFleet - Windows client install
 echo ========================================
 echo This PC will search the LAN for the console.
 echo Approve it on the host dashboard when asked.

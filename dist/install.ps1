@@ -1,4 +1,4 @@
-﻿# Fleet Console - Windows client install (ASCII only; Windows PowerShell 5.1)
+﻿# PrettyDamnFleet - Windows client install (ASCII only; Windows PowerShell 5.1)
 # Logs: %TEMP%\fleet-console-install.log
 #       %LOCALAPPDATA%\FleetConsole\install.log
 #
@@ -139,7 +139,7 @@ function Find-FleetByScan {
 }
 
 function Find-FleetConsole {
-  Write-Host "Searching the LAN for Fleet Console..."
+  Write-Host "Searching the LAN for PrettyDamnFleet..."
   $found = Find-FleetByUdp
   if ($found) {
     Write-Host ("Found via broadcast: " + $found)
@@ -151,7 +151,7 @@ function Find-FleetConsole {
     Write-Host ("Found via scan: " + $found)
     return $found
   }
-  throw "Could not find Fleet Console on the LAN. Open the dashboard on the host PC, allow the firewall, or pass -Server http://HOST:43123"
+  throw "Could not find PrettyDamnFleet on the LAN. Open the dashboard on the host PC, allow the firewall, or pass -Server http://HOST:43123"
 }
 
 function Request-FleetApproval {
@@ -166,7 +166,7 @@ function Request-FleetApproval {
     os       = $osName
   } | ConvertTo-Json -Compress
   Write-Host ("Requesting approval as " + $env:COMPUTERNAME + " (" + $env:USERNAME + ")")
-  Write-Host "Approve this PC on the Fleet Console dashboard."
+  Write-Host "Approve this PC on the PrettyDamnFleet dashboard."
   $created = Invoke-RestMethod -Method Post -Uri ($Base + "/api/join") -ContentType "application/json" -Body $payload
   if (-not $created.id) { throw "Host did not accept the join request." }
   $deadline = (Get-Date).AddMinutes(10)
@@ -187,11 +187,11 @@ function Request-FleetApproval {
 try {
   New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
   $stamp = Get-Date -Format o
-  Set-Content -Path $logTemp -Encoding ASCII -Value ("=== Fleet Console install " + $stamp + " ===")
+  Set-Content -Path $logTemp -Encoding ASCII -Value ("=== PrettyDamnFleet install " + $stamp + " ===")
   try { Start-Transcript -Path $logTemp -Append -Force | Out-Null } catch {}
 
   Write-Host ""
-  Write-Host "Fleet Console client installer" -ForegroundColor Cyan
+  Write-Host "PrettyDamnFleet client installer" -ForegroundColor Cyan
   Write-Host ("Log file: " + $logTemp)
   Write-Host ("Also:     " + $logLocal)
   Write-Host ("Folder:   " + $here)

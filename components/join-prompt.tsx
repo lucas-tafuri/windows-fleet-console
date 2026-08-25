@@ -19,7 +19,7 @@ export function JoinPrompt() {
     <Dialog open={Boolean(join)} onOpenChange={() => undefined}>
       <DialogContent showCloseButton={false} className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Allow this PC to join?</DialogTitle>
+          <DialogTitle>Allow this PC to join PrettyDamnFleet?</DialogTitle>
           <DialogDescription>
             A client found this console on the LAN and is waiting. Approve only
             machines you own.

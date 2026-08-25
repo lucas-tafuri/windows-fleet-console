@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	server := flag.String("server", "", "Fleet Console URL, e.g. http://192.168.1.10:43123")
+	server := flag.String("server", "", "PrettyDamnFleet URL, e.g. http://192.168.1.10:43123")
 	token := flag.String("token", "", "Fleet token from the Enroll page")
 	httpOnly := flag.Bool("http-only", false, "Skip WebSocket and use HTTP poll only")
 	dataDirFlag := flag.String("data-dir", "", "Directory for machine-id and install (default: %LOCALAPPDATA%\\FleetConsole)")
@@ -79,7 +79,7 @@ func main() {
 		},
 	}
 
-	fmt.Printf("Fleet agent → %s (ws=%v) install=%s\n", client.Server, !client.HTTPOnly, dataDir)
+	fmt.Printf("PrettyDamnFleet agent → %s (ws=%v) install=%s\n", client.Server, !client.HTTPOnly, dataDir)
 
 	go runLoop(client)
 	serveTray(client)

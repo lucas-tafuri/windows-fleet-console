@@ -66,6 +66,13 @@ export async function getSnapshot(opts?: {
     software: store.software || [],
     softwareStatus: store.softwareStatus || {},
     pendingJoins: (store.joins || []).filter((j) => j.status === "pending"),
+    mapPrefs: store.mapPrefs || {
+      letter: "Z",
+      unc: "",
+      username: "",
+      password: "",
+      uncHistory: [],
+    },
     demoActive,
     pinRequired: pinRequired(),
     unlocked,
@@ -92,7 +99,7 @@ export async function getEnrollInfo(hostHeader: string | null) {
     command: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1`,
     pollFallback: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -HttpOnly`,
     scheduledTask:
-      "install.ps1 / install.cmd copies the agent to %LOCALAPPDATA%\\FleetConsole and registers a logon task (Startup folder fallback).",
+      "install.ps1 / install.cmd copies the PrettyDamnFleet agent to %LOCALAPPDATA%\\FleetConsole and registers a logon task (Startup folder fallback).",
     repo: "https://github.com/lucas-tafuri/windows-fleet-console.git",
     oneLiner: `powershell -NoExit -NoProfile -ExecutionPolicy Bypass -Command "Write-Host 'Log will be at' $env:TEMP\\fleet-console-install.log; iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile $env:TEMP\\fleet-install.ps1; & $env:TEMP\\fleet-install.ps1"`,
   };
@@ -272,26 +279,95 @@ export async function createJob(input: {
   };
   for (const id of ids) {
     const machine = store.machines[id];
-    job.results[id] = {
-      machineId: id,
-      hostname: machine.hostname,
-      status: "queued",
-      message: "Waiting for agent",
-    };
+    const skip =
+      input.kind === "map_drive"
+        ? alreadyMappedMessage(machine, input.payload)
+        : null;
+    job.results[id] = skip
+      ? {
+          machineId: id,
+          hostname: machine.hostname,
+          status: "ok",
+          via: "already mapped",
+          message: skip,
+          finishedAt: Date.now(),
+        }
+      : {
+          machineId: id,
+          hostname: machine.hostname,
+          status: "queued",
+          message: "Waiting for agent",
+        };
+  }
+  if (
+    Object.values(job.results).every((r) => r.status === "ok" || r.status === "error")
+  ) {
+    job.status = "done";
   }
 
   await updateStore((s) => {
     s.jobs.push(job);
     if (s.jobs.length > 120) s.jobs.splice(0, s.jobs.length - 120);
+    if (input.kind === "map_drive") rememberMapPrefs(s, input.payload);
   });
 
   for (const id of ids) {
     const machine = store.machines[id];
     if (!machine?.demo) continue;
+    if (job.results[id]?.status !== "queued") continue;
     void runDemo(job.id, id);
   }
 
   return job;
+}
+
+function rememberMapPrefs(store: StoreData, payload: JobPayload) {
+  const unc = (payload.unc || "").trim();
+  const letter = (payload.letter || "").replace(/:$/, "").toUpperCase();
+  if (!store.mapPrefs) {
+    store.mapPrefs = {
+      letter: "Z",
+      unc: "",
+      username: "",
+      password: "",
+      uncHistory: [],
+    };
+  }
+  if (letter) store.mapPrefs.letter = letter;
+  if (unc) {
+    store.mapPrefs.unc = unc;
+    const want = normalizeUnc(unc);
+    store.mapPrefs.uncHistory = [
+      unc,
+      ...(store.mapPrefs.uncHistory || []).filter((u) => normalizeUnc(u) !== want),
+    ].slice(0, 12);
+  }
+  if (payload.username) store.mapPrefs.username = payload.username;
+  if (payload.password) store.mapPrefs.password = payload.password;
+}
+
+function normalizeUnc(path: string) {
+  return path.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+}
+
+function alreadyMappedMessage(machine: Machine, payload: JobPayload): string | null {
+  const letter = (payload.letter || "").replace(/:$/, "").toUpperCase();
+  const unc = (payload.unc || "").trim();
+  if (!letter || !unc) return null;
+  const want = normalizeUnc(unc);
+  const byLetter = (machine.mappedDrives || []).find(
+    (d) => d.letter.toUpperCase() === letter
+  );
+  if (byLetter) {
+    return `Already mapped ${letter}: to ${byLetter.path}; skipped`;
+  }
+  const byUnc = (machine.mappedDrives || []).find(
+    (d) => normalizeUnc(d.path) === want
+  );
+  if (byUnc) {
+    return `Already mapped ${byUnc.letter}: to ${byUnc.path}; skipped`;
+  }
+  return null;
 }
 
 async function runDemo(jobId: string, machineId: string) {
@@ -329,7 +405,13 @@ async function runDemo(jobId: string, machineId: string) {
       message: outcome.message,
       output: outcome.output,
     });
-    if (j.kind === "map_drive" && m && j.payload.letter && j.payload.unc) {
+    if (
+      j.kind === "map_drive" &&
+      m &&
+      j.payload.letter &&
+      j.payload.unc &&
+      outcome.via !== "already mapped"
+    ) {
       const letter = j.payload.letter.toUpperCase();
       m.mappedDrives = [
         ...m.mappedDrives.filter((d) => d.letter !== letter),

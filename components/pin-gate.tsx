@@ -40,7 +40,7 @@ export function PinGate({ children }: { children: React.ReactNode }) {
   if (needed === null) {
     return (
       <div className="flex min-h-full items-center justify-center text-sm text-muted-foreground">
-        Bringing the console up…
+        Bringing PrettyDamnFleet up…
       </div>
     );
   }
@@ -52,8 +52,16 @@ export function PinGate({ children }: { children: React.ReactNode }) {
           onSubmit={submit}
           className="w-full max-w-sm rounded-xl border border-white/8 bg-card p-6 shadow-[0_24px_80px_rgb(0_0_0/0.45)]"
         >
-          <p className="font-mono text-[11px] tracking-[0.22em] text-primary uppercase">
-            Fleet Console
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/pds-logo.png"
+            alt=""
+            width={130}
+            height={237}
+            className="h-12 w-auto"
+          />
+          <p className="mt-3 font-mono text-[11px] tracking-[0.18em] text-primary">
+            PrettyDamnFleet
           </p>
           <h1 className="mt-2 text-xl font-medium">Enter dashboard PIN</h1>
           <p className="mt-1 text-sm text-muted-foreground">

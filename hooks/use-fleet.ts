@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CatalogApp, FleetSnapshot, Job, JobKind, JobPayload } from "@/lib/types";
+import type { CatalogApp, FleetSnapshot, Job, JobKind, JobPayload, MapPrefs } from "@/lib/types";
+
+const EMPTY_MAP: MapPrefs = {
+  letter: "Z",
+  unc: "",
+  username: "",
+  password: "",
+  uncHistory: [],
+};
 
 const EMPTY: FleetSnapshot = {
   machines: [],
@@ -9,6 +17,7 @@ const EMPTY: FleetSnapshot = {
   software: [],
   softwareStatus: {},
   pendingJoins: [],
+  mapPrefs: EMPTY_MAP,
   demoActive: false,
   pinRequired: false,
   unlocked: true,
@@ -34,6 +43,7 @@ export function useFleet() {
         software: json.software || [],
         softwareStatus: json.softwareStatus || {},
         pendingJoins: json.pendingJoins || [],
+        mapPrefs: json.mapPrefs || EMPTY_MAP,
       });
       setError(null);
     } catch (err) {
@@ -70,6 +80,7 @@ export function useFleet() {
             software: json.software || [],
             softwareStatus: json.softwareStatus || {},
             pendingJoins: json.pendingJoins || [],
+            mapPrefs: json.mapPrefs || EMPTY_MAP,
           });
           setLoading(false);
           setError(null);

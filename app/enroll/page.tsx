@@ -56,7 +56,7 @@ export default function EnrollPage() {
             The installer broadcasts on UDP{" "}
             <span className="font-mono">43124</span> and checks HTTP{" "}
             <span className="font-mono">43123</span>. If Windows Firewall
-            prompts, allow Fleet Console / Node on the private network.
+            prompts, allow PrettyDamnFleet / Node on the private network.
           </p>
           {info?.lanUrls && info.lanUrls.length > 0 ? (
             <p className="mt-2 font-mono text-[11px] text-foreground/80">

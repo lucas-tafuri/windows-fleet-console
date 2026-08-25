@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import path from "path";
 import { randomBytes } from "crypto";
-import type { StoreData } from "./types";
+import type { MapPrefs, StoreData } from "./types";
 import { seedDemoMachines } from "./demo";
 import { DEFAULT_SOFTWARE } from "./catalog";
 
@@ -12,6 +12,49 @@ const TMP = path.join(DATA_DIR, "fleet.json.tmp");
 let cache: StoreData | null = null;
 let chain: Promise<void> = Promise.resolve();
 
+function emptyMapPrefs(): MapPrefs {
+  return { letter: "Z", unc: "", username: "", password: "", uncHistory: [] };
+}
+
+function normalizeUnc(path: string) {
+  return path.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+}
+
+function backfillMapPrefs(store: StoreData): boolean {
+  const prefs = store.mapPrefs;
+  if (!prefs) return false;
+  if (prefs.unc || (prefs.uncHistory && prefs.uncHistory.length > 0)) return false;
+  let changed = false;
+  for (const job of [...(store.jobs || [])].reverse()) {
+    if (job.kind !== "map_drive" || !job.payload.unc) continue;
+    const unc = job.payload.unc.trim();
+    if (!unc) continue;
+    const want = normalizeUnc(unc);
+    if (!prefs.uncHistory.some((u) => normalizeUnc(u) === want)) {
+      prefs.uncHistory.push(unc);
+      changed = true;
+    }
+    if (!prefs.unc) {
+      prefs.unc = unc;
+      changed = true;
+    }
+    if (job.payload.letter && prefs.letter === "Z") {
+      prefs.letter = job.payload.letter.replace(/:$/, "").toUpperCase();
+      changed = true;
+    }
+    if (job.payload.username && !prefs.username) {
+      prefs.username = job.payload.username;
+      changed = true;
+    }
+    if (job.payload.password && !prefs.password) {
+      prefs.password = job.payload.password;
+      changed = true;
+    }
+  }
+  prefs.uncHistory = prefs.uncHistory.slice(0, 12);
+  return changed;
+}
+
 function emptyStore(): StoreData {
   return {
     fleetToken: process.env.FLEET_TOKEN || randomBytes(24).toString("base64url"),
@@ -20,6 +63,7 @@ function emptyStore(): StoreData {
     software: DEFAULT_SOFTWARE.map((item) => ({ ...item })),
     softwareStatus: {},
     joins: [],
+    mapPrefs: emptyMapPrefs(),
   };
 }
 
@@ -42,6 +86,15 @@ async function loadFromDisk(): Promise<StoreData> {
       parsed.joins = [];
       dirty = true;
     }
+    if (!parsed.mapPrefs) {
+      parsed.mapPrefs = emptyMapPrefs();
+      dirty = true;
+    }
+    if (!parsed.mapPrefs.uncHistory) {
+      parsed.mapPrefs.uncHistory = [];
+      dirty = true;
+    }
+    if (backfillMapPrefs(parsed)) dirty = true;
     if (!parsed.fleetToken) {
       parsed.fleetToken =
         process.env.FLEET_TOKEN || randomBytes(24).toString("base64url");

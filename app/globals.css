@@ -57,45 +57,45 @@
 
 :root,
 .dark {
-  --ink: #12110f;
-  --panel: #1c1a17;
-  --background: #12110f;
-  --foreground: #ece7df;
-  --card: #1c1a17;
-  --card-foreground: #ece7df;
-  --popover: #1c1a17;
-  --popover-foreground: #ece7df;
-  --primary: #e8a04a;
-  --primary-foreground: #1a1408;
-  --secondary: #26231f;
-  --secondary-foreground: #ece7df;
-  --muted: #26231f;
-  --muted-foreground: #9a948c;
-  --accent: #2a241c;
-  --accent-foreground: #e8a04a;
-  --destructive: #d47878;
+  --ink: #050505;
+  --panel: #121214;
+  --background: #050505;
+  --foreground: #f4f1ea;
+  --card: #121214;
+  --card-foreground: #f4f1ea;
+  --popover: #121214;
+  --popover-foreground: #f4f1ea;
+  --primary: #f8d849;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1a1a1c;
+  --secondary-foreground: #f4f1ea;
+  --muted: #1a1a1c;
+  --muted-foreground: #9a9aa3;
+  --accent: #1f1c10;
+  --accent-foreground: #f8d849;
+  --destructive: #ef635d;
   --border: rgb(255 255 255 / 0.08);
   --input: rgb(255 255 255 / 0.12);
-  --ring: #e8a04a;
-  --chart-1: #e8a04a;
-  --chart-2: #8fbf9f;
-  --chart-3: #d47878;
-  --chart-4: #9bb0c9;
-  --chart-5: #9a948c;
+  --ring: #f8d849;
+  --chart-1: #f8d849;
+  --chart-2: #78a1d1;
+  --chart-3: #ef635d;
+  --chart-4: #9bb8d9;
+  --chart-5: #9a9aa3;
   --radius: 0.45rem;
-  --sidebar: #161410;
-  --sidebar-foreground: #ece7df;
-  --sidebar-primary: #e8a04a;
-  --sidebar-primary-foreground: #1a1408;
-  --sidebar-accent: #2a241c;
-  --sidebar-accent-foreground: #e8a04a;
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #f4f1ea;
+  --sidebar-primary: #f8d849;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #1f1c10;
+  --sidebar-accent-foreground: #f8d849;
   --sidebar-border: rgb(255 255 255 / 0.08);
-  --sidebar-ring: #e8a04a;
-  --online: #8fbf9f;
-  --load: #e8a04a;
-  --frozen: #d47878;
-  --offline: #8a8580;
-  --limited: #9bb0c9;
+  --sidebar-ring: #f8d849;
+  --online: #78a1d1;
+  --load: #f8d849;
+  --frozen: #ef635d;
+  --offline: #6b6b70;
+  --limited: #9bb8d9;
 }
 
 @layer base {
@@ -109,8 +109,10 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     background-image:
-      radial-gradient(1200px 500px at 10% -10%, rgb(232 160 74 / 0.07), transparent 55%),
-      linear-gradient(180deg, #141310 0%, #12110f 40%, #100f0d 100%);
+      radial-gradient(900px 420px at 8% -8%, rgb(248 216 73 / 0.12), transparent 55%),
+      radial-gradient(700px 380px at 92% 0%, rgb(120 161 209 / 0.09), transparent 50%),
+      radial-gradient(800px 400px at 50% 118%, rgb(239 99 93 / 0.07), transparent 50%),
+      linear-gradient(180deg, #0a0a0a 0%, #050505 50%, #000000 100%);
     background-attachment: fixed;
   }
   html {

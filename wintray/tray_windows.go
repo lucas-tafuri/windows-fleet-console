@@ -3,13 +3,20 @@
 package wintray
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
+	"image/color"
+	"image/png"
 	"runtime"
 	"sync"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
+
+//go:embed pds-logo.png
+var logoPNG []byte
 
 const (
 	wmDestroy     = 0x0002
@@ -168,7 +175,7 @@ func run(cfg Config) error {
 	mu.Unlock()
 
 	inst, _, _ := procGetModuleHandleW.Call(0)
-	className, err := windows.UTF16PtrFromString("FleetTrayWnd")
+	className, err := windows.UTF16PtrFromString("PrettyDamnFleetTrayWnd")
 	if err != nil {
 		return err
 	}
@@ -184,7 +191,7 @@ func run(cfg Config) error {
 		return fmt.Errorf("register class: %v", classErr)
 	}
 
-	title, _ := windows.UTF16PtrFromString("Fleet")
+	title, _ := windows.UTF16PtrFromString("PrettyDamnFleet")
 	h, _, createErr := procCreateWindowExW.Call(
 		0,
 		uintptr(unsafe.Pointer(className)),
@@ -218,7 +225,7 @@ func run(cfg Config) error {
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
 	tip := cfg.Tooltip
 	if tip == "" {
-		tip = "Fleet"
+		tip = "PrettyDamnFleet"
 	}
 	copyUTF16(nid.SzTip[:], tip)
 
@@ -338,6 +345,81 @@ func copyUTF16(dst []uint16, s string) {
 }
 
 func makeFleetIcon() windows.Handle {
+	if icon := iconFromPNG(logoPNG); icon != 0 {
+		return icon
+	}
+	return iconFromPDSColors()
+}
+
+func iconFromPNG(data []byte) windows.Handle {
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		return 0
+	}
+	return dibIcon(func(pix []byte, size int) {
+		b := img.Bounds()
+		srcW, srcH := b.Dx(), b.Dy()
+		if srcW < 1 || srcH < 1 {
+			return
+		}
+		// Letterbox into the square tray icon so the portrait logo is not stretched.
+		scale := float64(size) / float64(srcH)
+		if float64(srcW)*scale > float64(size) {
+			scale = float64(size) / float64(srcW)
+		}
+		dstW := int(float64(srcW) * scale)
+		dstH := int(float64(srcH) * scale)
+		if dstW < 1 {
+			dstW = 1
+		}
+		if dstH < 1 {
+			dstH = 1
+		}
+		ox := (size - dstW) / 2
+		oy := (size - dstH) / 2
+		for y := 0; y < dstH; y++ {
+			sy := b.Min.Y + y*srcH/dstH
+			for x := 0; x < dstW; x++ {
+				sx := b.Min.X + x*srcW/dstW
+				c := color.NRGBAModel.Convert(img.At(sx, sy)).(color.NRGBA)
+				if c.A < 16 {
+					continue
+				}
+				i := ((oy+y)*size + (ox + x)) * 4
+				pix[i+0] = c.B
+				pix[i+1] = c.G
+				pix[i+2] = c.R
+				pix[i+3] = c.A
+			}
+		}
+	})
+}
+
+func iconFromPDSColors() windows.Handle {
+	return dibIcon(func(pix []byte, size int) {
+		cx, cy, r2 := 15.5, 15.5, 13.0*13.0
+		for y := 0; y < size; y++ {
+			for x := 0; x < size; x++ {
+				dx := float64(x) - cx
+				dy := float64(y) - cy
+				if dx*dx+dy*dy > r2 {
+					continue
+				}
+				i := (y*size + x) * 4
+				switch {
+				case x < size/3:
+					pix[i+0], pix[i+1], pix[i+2], pix[i+3] = 0x49, 0xd8, 0xf8, 0xff // #f8d849
+				case x < (size*2)/3:
+					pix[i+0], pix[i+1], pix[i+2], pix[i+3] = 0x5d, 0x63, 0xef, 0xff // #ef635d
+				default:
+					pix[i+0], pix[i+1], pix[i+2], pix[i+3] = 0xd1, 0xa1, 0x78, 0xff // #78a1d1
+				}
+			}
+		}
+	})
+}
+
+func dibIcon(paint func(pix []byte, size int)) windows.Handle {
 	const size = 32
 	hdc, _, _ := procGetDC.Call(0)
 	if hdc == 0 {
@@ -354,37 +436,19 @@ func makeFleetIcon() windows.Handle {
 	bmi.Header.Compression = biRGB
 
 	var bits unsafe.Pointer
-	color, _, _ := procCreateDIBSection.Call(
+	colorBmp, _, _ := procCreateDIBSection.Call(
 		hdc,
 		uintptr(unsafe.Pointer(&bmi)),
 		dibRGBColors,
 		uintptr(unsafe.Pointer(&bits)),
 		0, 0,
 	)
-	if color == 0 || bits == nil {
+	if colorBmp == 0 || bits == nil {
 		return 0
 	}
 
 	pix := unsafe.Slice((*byte)(bits), size*size*4)
-	cx, cy, r2 := 15.5, 15.5, 13.0*13.0
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			dx := float64(x) - cx
-			dy := float64(y) - cy
-			i := (y*size + x) * 4
-			if dx*dx+dy*dy <= r2 {
-				pix[i+0] = 0x2a // B
-				pix[i+1] = 0xa0 // G
-				pix[i+2] = 0xe8 // R amber
-				pix[i+3] = 0xff
-			} else {
-				pix[i+0] = 0
-				pix[i+1] = 0
-				pix[i+2] = 0
-				pix[i+3] = 0
-			}
-		}
-	}
+	paint(pix, size)
 
 	maskBits := make([]byte, size*size/8)
 	for y := 0; y < size; y++ {
@@ -398,7 +462,7 @@ func makeFleetIcon() windows.Handle {
 	}
 	mask, _, _ := procCreateBitmap.Call(size, size, 1, 1, uintptr(unsafe.Pointer(&maskBits[0])))
 	if mask == 0 {
-		procDeleteObject.Call(color)
+		procDeleteObject.Call(colorBmp)
 		return 0
 	}
 
@@ -407,10 +471,10 @@ func makeFleetIcon() windows.Handle {
 		XHotspot: 16,
 		YHotspot: 16,
 		HbmMask:  windows.Handle(mask),
-		HbmColor: windows.Handle(color),
+		HbmColor: windows.Handle(colorBmp),
 	}
 	icon, _, _ := procCreateIconIndirect.Call(uintptr(unsafe.Pointer(&ii)))
-	procDeleteObject.Call(color)
+	procDeleteObject.Call(colorBmp)
 	procDeleteObject.Call(mask)
 	return windows.Handle(icon)
 }

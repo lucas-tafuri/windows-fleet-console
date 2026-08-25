@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { JobResults } from "@/components/job-results";
 import { softwareNeedle } from "@/lib/catalog";
-import type { CatalogApp, Job, JobKind, JobPayload } from "@/lib/types";
+import type { CatalogApp, Job, JobKind, JobPayload, MapPrefs } from "@/lib/types";
 
 export type ActionKey =
   | "package"
@@ -35,6 +35,7 @@ export function ActionSheet({
   busy,
   lastJob,
   software,
+  mapPrefs,
   onSubmit,
 }: {
   open: boolean;
@@ -44,6 +45,7 @@ export function ActionSheet({
   busy: boolean;
   lastJob: Job | null;
   software: CatalogApp[];
+  mapPrefs: MapPrefs;
   onSubmit: (kind: JobKind, payload: JobPayload) => Promise<void>;
 }) {
   const [pkgId, setPkgId] = useState("");
@@ -51,7 +53,7 @@ export function ActionSheet({
     "check"
   );
   const [letter, setLetter] = useState("Z");
-  const [unc, setUnc] = useState("\\\\nas\\share");
+  const [unc, setUnc] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [target, setTarget] = useState("notepad.exe");
@@ -61,6 +63,18 @@ export function ActionSheet({
   );
   const [branch, setBranch] = useState("main");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || (action !== "map" && action !== "unmap")) return;
+    if (mapPrefs.letter) setLetter(mapPrefs.letter);
+    if (action === "map") {
+      if (mapPrefs.unc) setUnc(mapPrefs.unc);
+      setUsername(mapPrefs.username || "");
+      setPassword(mapPrefs.password || "");
+    }
+    // Prefill when the sheet opens; do not clobber in-progress edits on live snapshots.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, action]);
 
   const title =
     action === "package"
@@ -186,8 +200,19 @@ export function ActionSheet({
                   className="font-mono"
                   value={unc}
                   onChange={(e) => setUnc(e.target.value)}
+                  list="unc-history"
+                  placeholder="\\server\share"
                 />
+                <datalist id="unc-history">
+                  {(mapPrefs.uncHistory || []).map((path) => (
+                    <option key={path} value={path} />
+                  ))}
+                </datalist>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Machines that already have this letter or share mapped are
+                skipped.
+              </p>
               <div className="grid gap-2">
                 <Label htmlFor="user">Username (optional)</Label>
                 <Input

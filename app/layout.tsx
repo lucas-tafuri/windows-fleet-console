@@ -17,8 +17,12 @@ const ibmMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Fleet Console",
+  title: "PrettyDamnFleet",
   description: "Remote control for your Windows machines",
+  icons: {
+    icon: "/pds-logo.png",
+    apple: "/pds-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

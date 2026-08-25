@@ -1,5 +1,5 @@
 @echo off
-title Fleet Console install log
+title PrettyDamnFleet install log
 set "LOG1=%TEMP%\fleet-console-install.log"
 set "LOG2=%LOCALAPPDATA%\FleetConsole\install.log"
 echo Opening install log...

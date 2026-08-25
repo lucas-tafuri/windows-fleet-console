@@ -37,7 +37,7 @@ func main() {
 	rootDir = findRoot()
 	_ = os.MkdirAll(filepath.Join(rootDir, "data"), 0o755)
 	setupLog()
-	logf("Fleet Console host root=%s", rootDir)
+	logf("PrettyDamnFleet host root=%s", rootDir)
 
 	if err := registerLogon(); err != nil {
 		logf("logon registration: %v", err)
@@ -48,7 +48,7 @@ func main() {
 	}
 
 	err := wintray.Run(wintray.Config{
-		Tooltip: "Fleet Console",
+		Tooltip: "PrettyDamnFleet",
 		Items: []wintray.Item{
 			{ID: trayOpenID, Title: "Open"},
 			{ID: trayUpdateID, Title: "Update"},

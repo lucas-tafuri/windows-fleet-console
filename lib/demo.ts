@@ -156,6 +156,29 @@ export async function simulateDemoResult(job: Job, machine: Machine) {
   }
 
   if (kind === "map_drive") {
+    const want = (job.payload.unc || "").replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+    const existingLetter = machine.mappedDrives.find(
+      (d) => d.letter.toUpperCase() === letter
+    );
+    if (existingLetter) {
+      return {
+        status: "ok" as const,
+        via: "already mapped",
+        message: `Already mapped ${letter}: to ${existingLetter.path}; skipped`,
+        output: existingLetter.path,
+      };
+    }
+    const existingUnc = machine.mappedDrives.find(
+      (d) => d.path.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase() === want
+    );
+    if (existingUnc) {
+      return {
+        status: "ok" as const,
+        via: "already mapped",
+        message: `Already mapped ${existingUnc.letter}: to ${existingUnc.path}; skipped`,
+        output: existingUnc.path,
+      };
+    }
     return {
       status: "ok" as const,
       via: "net use",
