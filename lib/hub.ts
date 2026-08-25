@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import os from "os";
 import { getStore, updateStore } from "./store";
 import { deriveStatus, lastSeenLabel } from "./status";
 import {
@@ -65,12 +66,19 @@ export async function getSnapshot(opts?: {
 
 export async function getEnrollInfo(hostHeader: string | null) {
   const store = await getStore();
+  const port = process.env.PORT || "43123";
+  const lanUrls = lanHttpUrls(port);
+  const fromHeader = guessPublicUrl(hostHeader);
+  const localhost =
+    fromHeader.includes("127.0.0.1") || fromHeader.includes("localhost");
   const proto =
     process.env.FLEET_PUBLIC_URL?.replace(/\/$/, "") ||
-    guessPublicUrl(hostHeader);
+    (localhost && lanUrls[0] ? lanUrls[0] : fromHeader);
   return {
     token: store.fleetToken,
     serverUrl: proto,
+    lanUrls,
+    localhostHint: localhost && !process.env.FLEET_PUBLIC_URL,
     command: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Server ${proto} -Token ${store.fleetToken}`,
     pollFallback: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Server ${proto} -Token ${store.fleetToken} -HttpOnly`,
     scheduledTask:
@@ -78,6 +86,18 @@ export async function getEnrollInfo(hostHeader: string | null) {
     repo: "https://github.com/lucas-tafuri/windows-fleet-console.git",
     oneLiner: `powershell -NoExit -NoProfile -ExecutionPolicy Bypass -Command "Write-Host 'Log will be at' $env:TEMP\\fleet-console-install.log; iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile $env:TEMP\\fleet-install.ps1; & $env:TEMP\\fleet-install.ps1 -Server '${proto}' -Token '${store.fleetToken}'"`,
   };
+}
+
+function lanHttpUrls(port: string): string[] {
+  const urls: string[] = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const a of list || []) {
+      const v4 = a.family === "IPv4" || (a.family as unknown) === 4;
+      if (!v4 || a.internal || !a.address) continue;
+      urls.push(`http://${a.address}:${port}`);
+    }
+  }
+  return urls;
 }
 
 function guessPublicUrl(hostHeader: string | null) {

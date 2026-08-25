@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 type EnrollInfo = {
   token: string;
   serverUrl: string;
+  lanUrls?: string[];
+  localhostHint?: boolean;
   command: string;
   pollFallback: string;
   scheduledTask: string;
@@ -51,9 +53,52 @@ export default function EnrollPage() {
       {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
 
       <ol className="mt-8 grid gap-6">
+        <Step n="00" title="Console URL for other PCs">
+          <p>
+            Agents cannot use{" "}
+            <span className="font-mono">http://127.0.0.1:43123</span> unless
+            the console is running on that same PC. Use the address of the
+            machine that hosts this dashboard, port{" "}
+            <span className="font-mono">43123</span>.
+          </p>
+          {info ? (
+            <div className="mt-3 grid gap-2">
+              <p className="text-xs tracking-wide text-muted-foreground uppercase">
+                Use this as -Server
+              </p>
+              <CopyBlock
+                value={info.serverUrl}
+                copied={copied === "url"}
+                onCopy={() => copy("url", info.serverUrl)}
+              />
+              {info.lanUrls && info.lanUrls.length > 0 ? (
+                <p className="font-mono text-[11px] text-foreground/80">
+                  Detected on this host: {info.lanUrls.join("  ·  ")}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  On the console host, run{" "}
+                  <span className="font-mono">ipconfig</span> (Windows) or{" "}
+                  <span className="font-mono">hostname -I</span> (Linux) and
+                  use <span className="font-mono">http://THAT_IP:43123</span>.
+                </p>
+              )}
+              {info.localhostHint &&
+              (!info.lanUrls || info.lanUrls.length === 0) ? (
+                <p className="text-xs text-load">
+                  This page was opened via localhost and no LAN IP was
+                  detected. Other machines will not reach 127.0.0.1.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </Step>
         <Step n="01" title="Run the install script on the PC">
-          From PowerShell (admin not required). Installs Git if missing, fetches
-          the agent, registers it at Windows logon, and starts it:
+          From PowerShell. The window stays open and a log is written to{" "}
+          <span className="font-mono text-foreground/80">
+            %TEMP%\fleet-console-install.log
+          </span>
+          :
           {info?.oneLiner ? (
             <CopyBlock
               value={info.oneLiner}
