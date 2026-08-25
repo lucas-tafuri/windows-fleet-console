@@ -27,6 +27,7 @@ func main() {
 	}
 	dataDir = dir
 	_ = os.MkdirAll(dataDir, 0o755)
+	setupLog()
 
 	agentCfg = loadConfig()
 	if *server != "" {
@@ -80,14 +81,11 @@ func main() {
 
 	fmt.Printf("Fleet agent → %s (ws=%v) install=%s\n", client.Server, !client.HTTPOnly, dataDir)
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	go runLoop(client)
+	serveTray(client)
+}
 
-	go func() {
-		<-stop
-		os.Exit(0)
-	}()
-
+func runLoop(client *Client) {
 	backoff := time.Second
 	for {
 		err := client.RunOnce()
@@ -102,6 +100,12 @@ func main() {
 			backoff = 15 * time.Second
 		}
 	}
+}
+
+func waitSignal() {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
 }
 
 func trimSlash(s string) string {

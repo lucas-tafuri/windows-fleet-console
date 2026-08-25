@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FleetSnapshot, Job, JobKind, JobPayload } from "@/lib/types";
+import type { CatalogApp, FleetSnapshot, Job, JobKind, JobPayload } from "@/lib/types";
 
 const EMPTY: FleetSnapshot = {
   machines: [],
   jobs: [],
+  software: [],
+  softwareStatus: {},
   demoActive: false,
   pinRequired: false,
   unlocked: true,
@@ -26,7 +28,11 @@ export function useFleet() {
       const res = await fetch("/api/fleet", { cache: "no-store" });
       if (!res.ok) throw new Error(`Fleet ${res.status}`);
       const json = (await res.json()) as FleetSnapshot;
-      setData(json);
+      setData({
+        ...json,
+        software: json.software || [],
+        softwareStatus: json.softwareStatus || {},
+      });
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Cannot reach console");
@@ -57,7 +63,11 @@ export function useFleet() {
         try {
           const json = JSON.parse(String(ev.data)) as FleetSnapshot;
           if (closed) return;
-          setData(json);
+          setData({
+            ...json,
+            software: json.software || [],
+            softwareStatus: json.softwareStatus || {},
+          });
           setLoading(false);
           setError(null);
           setTransport("ws");
@@ -123,5 +133,68 @@ export function useFleet() {
     [pull]
   );
 
-  return { data, loading, error, transport, busy, pull, unlock, submitJob };
+  const clearJobs = useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/jobs", { method: "DELETE" });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error || "Could not clear jobs");
+      await pull();
+    } finally {
+      setBusy(false);
+    }
+  }, [pull]);
+
+  const addSoftware = useCallback(
+    async (input: { name: string; match?: string; wingetId?: string }) => {
+      setBusy(true);
+      try {
+        const res = await fetch("/api/software", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        });
+        const json = (await res.json()) as { item?: CatalogApp; error?: string };
+        if (!res.ok || !json.item) throw new Error(json.error || "Could not add software");
+        await pull();
+        return json.item;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [pull]
+  );
+
+  const removeSoftware = useCallback(
+    async (id: string) => {
+      setBusy(true);
+      try {
+        const res = await fetch("/api/software", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(json.error || "Could not remove software");
+        await pull();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [pull]
+  );
+
+  return {
+    data,
+    loading,
+    error,
+    transport,
+    busy,
+    pull,
+    unlock,
+    submitJob,
+    clearJobs,
+    addSoftware,
+    removeSoftware,
+  };
 }

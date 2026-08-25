@@ -3,6 +3,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 import type { StoreData } from "./types";
 import { seedDemoMachines } from "./demo";
+import { DEFAULT_SOFTWARE } from "./catalog";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "fleet.json");
@@ -16,6 +17,8 @@ function emptyStore(): StoreData {
     fleetToken: process.env.FLEET_TOKEN || randomBytes(24).toString("base64url"),
     machines: {},
     jobs: [],
+    software: DEFAULT_SOFTWARE.map((item) => ({ ...item })),
+    softwareStatus: {},
   };
 }
 
@@ -25,11 +28,22 @@ async function loadFromDisk(): Promise<StoreData> {
     const parsed = JSON.parse(raw) as StoreData;
     if (!parsed.machines) parsed.machines = {};
     if (!parsed.jobs) parsed.jobs = [];
+    let dirty = false;
+    if (!parsed.software) {
+      parsed.software = DEFAULT_SOFTWARE.map((item) => ({ ...item }));
+      dirty = true;
+    }
+    if (!parsed.softwareStatus) {
+      parsed.softwareStatus = {};
+      dirty = true;
+    }
     if (!parsed.fleetToken) {
       parsed.fleetToken =
         process.env.FLEET_TOKEN || randomBytes(24).toString("base64url");
+      dirty = true;
     }
     if (process.env.FLEET_TOKEN) parsed.fleetToken = process.env.FLEET_TOKEN;
+    if (dirty) await persist(parsed);
     return parsed;
   } catch {
     const store = emptyStore();

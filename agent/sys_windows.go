@@ -40,9 +40,8 @@ var (
 	procGetLogicalDrives       = modKernel32.NewProc("GetLogicalDrives")
 	procGetDriveTypeW          = modKernel32.NewProc("GetDriveTypeW")
 	procGetLastInputInfo       = modUser32.NewProc("GetLastInputInfo")
-	procEnumWindows            = modUser32.NewProc("EnumWindows")
-	procIsWindowVisible        = modUser32.NewProc("IsWindowVisible")
-	procSendMessageTimeoutW    = modUser32.NewProc("SendMessageTimeoutW")
+	procGetForegroundWindow    = modUser32.NewProc("GetForegroundWindow")
+	procIsHungAppWindow        = modUser32.NewProc("IsHungAppWindow")
 	procSHEmptyRecycleBinW     = modShell32.NewProc("SHEmptyRecycleBinW")
 	procShellExecuteW          = modShell32.NewProc("ShellExecuteW")
 	procWNetAddConnection2W    = modMpr.NewProc("WNetAddConnection2W")
@@ -54,6 +53,7 @@ var (
 	prevCPUValid                   bool
 	prevCPU100                     bool
 	prevInputAge                   int64
+	hungStreak                     int
 )
 
 type filetime struct {
@@ -135,35 +135,22 @@ func lastInputAge() (int64, error) {
 }
 
 const (
-	wmNull          = 0x0000
-	smtoAbortIfHung = 0x0002
-	driveRemote     = 4
+	driveRemote = 4
 )
 
-var hungFound bool
-var enumHungCB = windows.NewCallback(enumHung)
-
-func enumHung(hwnd uintptr, _ uintptr) uintptr {
-	vis, _, _ := procIsWindowVisible.Call(hwnd)
-	if vis == 0 {
-		return 1
-	}
-	var result uintptr
-	r, _, _ := procSendMessageTimeoutW.Call(hwnd, wmNull, 0, 0, smtoAbortIfHung, 800, uintptr(unsafe.Pointer(&result)))
-	if r == 0 {
-		hungFound = true
-		return 0
-	}
-	return 1
-}
-
-func hungWindows() (bool, error) {
-	hungFound = false
-	r, _, err := procEnumWindows.Call(enumHungCB, 0)
-	if r == 0 && !hungFound {
+func hungForeground() (bool, error) {
+	if err := procGetForegroundWindow.Find(); err != nil {
 		return false, err
 	}
-	return hungFound, nil
+	if err := procIsHungAppWindow.Find(); err != nil {
+		return false, err
+	}
+	hwnd, _, _ := procGetForegroundWindow.Call()
+	if hwnd == 0 {
+		return false, nil
+	}
+	r, _, _ := procIsHungAppWindow.Call(hwnd)
+	return r != 0, nil
 }
 
 func collectSnapshot() snapshot {
@@ -189,10 +176,16 @@ func collectSnapshot() snapshot {
 		s.LastInputAgeMs = &age
 	}
 
-	hung, hungErr := hungWindows()
+	hung, hungErr := hungForeground()
 	if hungErr == nil {
-		s.Frozen = hung
+		if hung {
+			hungStreak++
+		} else {
+			hungStreak = 0
+		}
+		s.Frozen = hungStreak >= 2
 	} else {
+		hungStreak = 0
 		cpu100 := s.CPU != nil && *s.CPU >= 99.5
 		inputStuck := ageErr == nil && prevInputAge != 0 && age == prevInputAge
 		s.Frozen = prevCPU100 && cpu100 && inputStuck

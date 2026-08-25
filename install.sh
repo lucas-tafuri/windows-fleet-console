@@ -21,6 +21,10 @@ if [[ ! -f dist/fleet-agent.exe ]] && command -v go >/dev/null 2>&1; then
   echo ">> building Windows agent"
   bash scripts/build-agent.sh || true
 fi
+if [[ ! -f dist/fleet-console.exe ]] && command -v go >/dev/null 2>&1; then
+  echo ">> building Windows console host"
+  bash -lc 'cd host && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H windowsgui" -o ../dist/fleet-console.exe .' || true
+fi
 
 echo ">> starting Fleet Console on :43123"
 exec npm run dev

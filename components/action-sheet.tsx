@@ -13,7 +13,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { JobResults } from "@/components/job-results";
-import type { Job, JobKind, JobPayload } from "@/lib/types";
+import { softwareNeedle } from "@/lib/catalog";
+import type { CatalogApp, Job, JobKind, JobPayload } from "@/lib/types";
 
 export type ActionKey =
   | "package"
@@ -33,6 +34,7 @@ export function ActionSheet({
   selectedCount,
   busy,
   lastJob,
+  software,
   onSubmit,
 }: {
   open: boolean;
@@ -41,9 +43,10 @@ export function ActionSheet({
   selectedCount: number;
   busy: boolean;
   lastJob: Job | null;
+  software: CatalogApp[];
   onSubmit: (kind: JobKind, payload: JobPayload) => Promise<void>;
 }) {
-  const [pkg, setPkg] = useState("VideoLAN.VLC");
+  const [pkgId, setPkgId] = useState("");
   const [pkgMode, setPkgMode] = useState<"check" | "install" | "uninstall">(
     "check"
   );
@@ -80,7 +83,12 @@ export function ActionSheet({
     setError(null);
     try {
       if (action === "package") {
-        await onSubmit(pkgMode, { package: pkg.trim() });
+        const item = software.find((s) => s.id === pkgId) || software[0];
+        if (!item) {
+          setError("Add titles on the Software page first.");
+          return;
+        }
+        await onSubmit(pkgMode, { package: softwareNeedle(item) });
       } else if (action === "map") {
         await onSubmit("map_drive", {
           letter,
@@ -146,17 +154,23 @@ export function ActionSheet({
                 ))}
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="pkg">Package id or name</Label>
-                <Input
+                <Label htmlFor="pkg">Catalog title</Label>
+                <select
                   id="pkg"
-                  className="font-mono"
-                  value={pkg}
-                  onChange={(e) => setPkg(e.target.value)}
-                  placeholder="VideoLAN.VLC"
-                />
+                  value={pkgId || software[0]?.id || ""}
+                  onChange={(e) => setPkgId(e.target.value)}
+                  className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                >
+                  {software.map((item) => (
+                    <option key={item.id} value={item.id} className="bg-card">
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-muted-foreground">
-                  Uses winget when present, then the uninstall registry to
-                  detect.
+                  Managed on the Software page. Check uses display-name
+                  matching; install/uninstall need a winget id when the title
+                  is not in winget.
                 </p>
               </div>
             </>

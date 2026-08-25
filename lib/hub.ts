@@ -9,9 +9,11 @@ import {
   tickDemoMachines,
 } from "./demo";
 import { agentTokenOk, isUnlocked, pinRequired } from "./auth";
+import { slugSoftwareId } from "./catalog";
 import type {
   AgentJobResult,
   AssignedJob,
+  CatalogApp,
   FleetSnapshot,
   Heartbeat,
   Job,
@@ -19,6 +21,7 @@ import type {
   JobPayload,
   Machine,
   MachineView,
+  StoreData,
 } from "./types";
 
 function newId(prefix: string) {
@@ -56,6 +59,8 @@ export async function getSnapshot(opts?: {
   return {
     machines,
     jobs,
+    software: store.software || [],
+    softwareStatus: store.softwareStatus || {},
     demoActive,
     pinRequired: pinRequired(),
     unlocked,
@@ -143,13 +148,13 @@ function pendingJobsFor(store: { jobs: Job[] }, machineId: string): AssignedJob[
 }
 
 function applyAgentResults(
-  jobs: Job[],
+  store: { jobs: Job[]; software: CatalogApp[]; softwareStatus: StoreData["softwareStatus"] },
   machine: Machine,
   results: AgentJobResult[] | undefined
 ) {
   if (!results?.length) return;
   for (const incoming of results) {
-    const job = jobs.find((j) => j.id === incoming.jobId);
+    const job = store.jobs.find((j) => j.id === incoming.jobId);
     if (!job) continue;
     const slot = job.results[machine.id];
     if (!slot) continue;
@@ -158,11 +163,56 @@ function applyAgentResults(
     slot.message = incoming.message;
     slot.output = incoming.output;
     slot.finishedAt = Date.now();
+    recordSoftwareStatus(store, machine.id, job, incoming);
     const values = Object.values(job.results);
     if (values.every((r) => r.status === "ok" || r.status === "error")) {
       job.status = "done";
     }
   }
+}
+
+function matchCatalog(software: CatalogApp[], pkg: string) {
+  const n = pkg.trim().toLowerCase();
+  if (!n) return undefined;
+  return software.find(
+    (item) =>
+      item.match.toLowerCase() === n ||
+      item.name.toLowerCase() === n ||
+      (item.wingetId && item.wingetId.toLowerCase() === n)
+  );
+}
+
+function recordSoftwareStatus(
+  store: { software: CatalogApp[]; softwareStatus: StoreData["softwareStatus"] },
+  machineId: string,
+  job: Job,
+  result: AgentJobResult
+) {
+  if (job.kind !== "check" && job.kind !== "install" && job.kind !== "uninstall") return;
+  const pkg = job.payload.package || "";
+  const item = matchCatalog(store.software || [], pkg);
+  if (!item) return;
+  if (!store.softwareStatus) store.softwareStatus = {};
+  if (!store.softwareStatus[machineId]) store.softwareStatus[machineId] = {};
+
+  let installed: boolean | null = null;
+  if (job.kind === "install") {
+    installed = result.status === "ok";
+  } else if (job.kind === "uninstall") {
+    installed = result.status === "ok" ? false : null;
+  } else {
+    const msg = result.message.toLowerCase();
+    if (msg.includes("not installed")) installed = false;
+    else if (msg.includes("is installed")) installed = true;
+  }
+  if (installed == null) return;
+
+  store.softwareStatus[machineId][item.id] = {
+    installed,
+    lastChecked: Date.now(),
+    via: result.via,
+    detail: result.message,
+  };
 }
 
 export async function handleAgentPoll(
@@ -189,7 +239,7 @@ export async function handleAgentPoll(
     }
     const machine = applyHeartbeat(existing, hb, transport);
     s.machines[machine.id] = machine;
-    applyAgentResults(s.jobs, machine, hb.results);
+    applyAgentResults(s, machine, hb.results);
     assigned = pendingJobsFor(s, machine.id);
     machineId = machine.id;
   });
@@ -267,6 +317,13 @@ async function runDemo(jobId: string, machineId: string) {
     r.message = outcome.message;
     r.output = outcome.output;
     r.finishedAt = Date.now();
+    recordSoftwareStatus(s, machineId, j, {
+      jobId: j.id,
+      status: outcome.status,
+      via: outcome.via,
+      message: outcome.message,
+      output: outcome.output,
+    });
     if (j.kind === "map_drive" && m && j.payload.letter && j.payload.unc) {
       const letter = j.payload.letter.toUpperCase();
       m.mappedDrives = [
@@ -281,6 +338,46 @@ async function runDemo(jobId: string, machineId: string) {
     const values = Object.values(j.results);
     if (values.every((x) => x.status === "ok" || x.status === "error")) {
       j.status = "done";
+    }
+  });
+}
+
+export async function clearJobs() {
+  await updateStore((s) => {
+    s.jobs = [];
+  });
+}
+
+export async function addCatalogApp(input: {
+  name: string;
+  match?: string;
+  wingetId?: string;
+}): Promise<CatalogApp> {
+  const name = input.name.trim();
+  if (!name) throw new Error("Name is required");
+  const match = (input.match || name).trim();
+  const wingetId = input.wingetId?.trim() || undefined;
+  const idBase = slugSoftwareId(name);
+  let app: CatalogApp | null = null;
+  await updateStore((s) => {
+    if (!s.software) s.software = [];
+    let id = idBase;
+    let n = 2;
+    while (s.software.some((item) => item.id === id)) {
+      id = `${idBase}-${n++}`;
+    }
+    app = { id, name, match, wingetId };
+    s.software.push(app);
+  });
+  if (!app) throw new Error("Could not add software");
+  return app;
+}
+
+export async function removeCatalogApp(id: string) {
+  await updateStore((s) => {
+    s.software = (s.software || []).filter((item) => item.id !== id);
+    for (const machineId of Object.keys(s.softwareStatus || {})) {
+      delete s.softwareStatus[machineId][id];
     }
   });
 }

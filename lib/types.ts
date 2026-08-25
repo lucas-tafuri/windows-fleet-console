@@ -103,6 +103,22 @@ export type AgentJobResult = {
   output?: string;
 };
 
+export type CatalogApp = {
+  id: string;
+  name: string;
+  match: string;
+  wingetId?: string;
+};
+
+export type SoftwareInstall = {
+  installed: boolean;
+  lastChecked: number;
+  via?: string;
+  detail?: string;
+};
+
+export type SoftwareStatusMap = Record<string, Record<string, SoftwareInstall>>;
+
 export type MachineView = Machine & {
   status: MachineStatus;
   lastSeenLabel: string;
@@ -111,6 +127,8 @@ export type MachineView = Machine & {
 export type FleetSnapshot = {
   machines: MachineView[];
   jobs: Job[];
+  software: CatalogApp[];
+  softwareStatus: SoftwareStatusMap;
   demoActive: boolean;
   pinRequired: boolean;
   unlocked: boolean;
@@ -122,4 +140,6 @@ export type StoreData = {
   fleetToken: string;
   machines: Record<string, Machine>;
   jobs: Job[];
+  software: CatalogApp[];
+  softwareStatus: SoftwareStatusMap;
 };
