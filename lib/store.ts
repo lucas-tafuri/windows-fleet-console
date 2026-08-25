@@ -19,6 +19,7 @@ function emptyStore(): StoreData {
     jobs: [],
     software: DEFAULT_SOFTWARE.map((item) => ({ ...item })),
     softwareStatus: {},
+    joins: [],
   };
 }
 
@@ -35,6 +36,10 @@ async function loadFromDisk(): Promise<StoreData> {
     }
     if (!parsed.softwareStatus) {
       parsed.softwareStatus = {};
+      dirty = true;
+    }
+    if (!parsed.joins) {
+      parsed.joins = [];
       dirty = true;
     }
     if (!parsed.fleetToken) {

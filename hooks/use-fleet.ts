@@ -8,6 +8,7 @@ const EMPTY: FleetSnapshot = {
   jobs: [],
   software: [],
   softwareStatus: {},
+  pendingJoins: [],
   demoActive: false,
   pinRequired: false,
   unlocked: true,
@@ -32,6 +33,7 @@ export function useFleet() {
         ...json,
         software: json.software || [],
         softwareStatus: json.softwareStatus || {},
+        pendingJoins: json.pendingJoins || [],
       });
       setError(null);
     } catch (err) {
@@ -67,6 +69,7 @@ export function useFleet() {
             ...json,
             software: json.software || [],
             softwareStatus: json.softwareStatus || {},
+            pendingJoins: json.pendingJoins || [],
           });
           setLoading(false);
           setError(null);
@@ -184,6 +187,25 @@ export function useFleet() {
     [pull]
   );
 
+  const decideJoin = useCallback(
+    async (id: string, action: "approve" | "deny") => {
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/join/${id}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(json.error || "Could not update join");
+        await pull();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [pull]
+  );
+
   return {
     data,
     loading,
@@ -196,5 +218,6 @@ export function useFleet() {
     clearJobs,
     addSoftware,
     removeSoftware,
+    decideJoin,
   };
 }

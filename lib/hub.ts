@@ -19,10 +19,13 @@ import type {
   Job,
   JobKind,
   JobPayload,
+  JoinRequest,
   Machine,
   MachineView,
   StoreData,
 } from "./types";
+
+export const JOIN_TTL_MS = 10 * 60 * 1000;
 
 function newId(prefix: string) {
   return `${prefix}_${randomBytes(8).toString("hex")}`;
@@ -33,6 +36,7 @@ export async function getSnapshot(opts?: {
 }): Promise<FleetSnapshot> {
   const store = await getStore();
   tickDemoMachines(store);
+  pruneJoins(store);
   const demoActive = !hasRealAgents(store);
   if (demoActive) seedDemoMachines(store);
 
@@ -61,6 +65,7 @@ export async function getSnapshot(opts?: {
     jobs,
     software: store.software || [],
     softwareStatus: store.softwareStatus || {},
+    pendingJoins: (store.joins || []).filter((j) => j.status === "pending"),
     demoActive,
     pinRequired: pinRequired(),
     unlocked,
@@ -84,12 +89,12 @@ export async function getEnrollInfo(hostHeader: string | null) {
     serverUrl: proto,
     lanUrls,
     localhostHint: localhost && !process.env.FLEET_PUBLIC_URL,
-    command: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Server ${proto} -Token ${store.fleetToken}`,
-    pollFallback: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Server ${proto} -Token ${store.fleetToken} -HttpOnly`,
+    command: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1`,
+    pollFallback: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -HttpOnly`,
     scheduledTask:
       "install.ps1 / install.cmd copies the agent to %LOCALAPPDATA%\\FleetConsole and registers a logon task (Startup folder fallback).",
     repo: "https://github.com/lucas-tafuri/windows-fleet-console.git",
-    oneLiner: `powershell -NoExit -NoProfile -ExecutionPolicy Bypass -Command "Write-Host 'Log will be at' $env:TEMP\\fleet-console-install.log; iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile $env:TEMP\\fleet-install.ps1; & $env:TEMP\\fleet-install.ps1 -Server '${proto}' -Token '${store.fleetToken}'"`,
+    oneLiner: `powershell -NoExit -NoProfile -ExecutionPolicy Bypass -Command "Write-Host 'Log will be at' $env:TEMP\\fleet-console-install.log; iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile $env:TEMP\\fleet-install.ps1; & $env:TEMP\\fleet-install.ps1"`,
   };
 }
 
@@ -380,4 +385,103 @@ export async function removeCatalogApp(id: string) {
       delete s.softwareStatus[machineId][id];
     }
   });
+}
+
+function pruneJoins(store: StoreData, now = Date.now()) {
+  if (!store.joins) store.joins = [];
+  store.joins = store.joins.filter((j) => {
+    const age = now - j.createdAt;
+    if (j.status === "pending") return age <= JOIN_TTL_MS;
+    const decidedAge = now - (j.decidedAt || j.createdAt);
+    return decidedAge <= JOIN_TTL_MS;
+  });
+}
+
+export async function createJoinRequest(input: {
+  hostname: string;
+  user: string;
+  os: string;
+  ip: string;
+}): Promise<JoinRequest> {
+  const hostname = input.hostname.trim();
+  const user = input.user.trim();
+  if (!hostname) throw new Error("hostname required");
+  const now = Date.now();
+  let created: JoinRequest | null = null;
+  await updateStore((s) => {
+    pruneJoins(s, now);
+    const existing = s.joins.find(
+      (j) =>
+        j.status === "pending" &&
+        j.hostname.toLowerCase() === hostname.toLowerCase() &&
+        j.user.toLowerCase() === user.toLowerCase()
+    );
+    if (existing) {
+      existing.ip = input.ip || existing.ip;
+      existing.os = input.os || existing.os;
+      created = existing;
+      return;
+    }
+    created = {
+      id: newId("join"),
+      hostname,
+      user,
+      os: input.os.trim() || "Windows",
+      ip: input.ip.trim(),
+      createdAt: now,
+      status: "pending",
+    };
+    s.joins.push(created);
+    if (s.joins.length > 40) s.joins.splice(0, s.joins.length - 40);
+  });
+  if (!created) throw new Error("Could not create join request");
+  return created;
+}
+
+export async function getJoin(id: string): Promise<JoinRequest | undefined> {
+  const store = await getStore();
+  pruneJoins(store);
+  return (store.joins || []).find((j) => j.id === id);
+}
+
+export async function decideJoin(
+  id: string,
+  action: "approve" | "deny"
+): Promise<JoinRequest> {
+  const now = Date.now();
+  let found: JoinRequest | undefined;
+  await updateStore((s) => {
+    pruneJoins(s, now);
+    const join = (s.joins || []).find((j) => j.id === id);
+    if (!join) return false;
+    if (join.status !== "pending") {
+      found = join;
+      return false;
+    }
+    join.status = action === "approve" ? "approved" : "denied";
+    join.decidedAt = now;
+    found = join;
+  });
+  if (!found) throw new Error("Join request not found or expired");
+  return found;
+}
+
+export function publicJoinView(
+  join: JoinRequest,
+  opts?: { token?: string; server?: string }
+) {
+  if (join.status === "approved") {
+    return {
+      id: join.id,
+      status: join.status,
+      hostname: join.hostname,
+      server: opts?.server,
+      token: opts?.token,
+    };
+  }
+  return {
+    id: join.id,
+    status: join.status,
+    hostname: join.hostname,
+  };
 }

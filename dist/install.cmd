@@ -5,9 +5,8 @@ echo.
 echo ========================================
 echo  Fleet Console - Windows client install
 echo ========================================
-echo Folder: %CD%
-echo Log:    %TEMP%\fleet-console-install.log
-echo Also:   %LOCALAPPDATA%\FleetConsole\install.log
+echo This PC will search the LAN for the console.
+echo Approve it on the host dashboard when asked.
 echo.
 
 if not exist "%~dp0install.ps1" (
