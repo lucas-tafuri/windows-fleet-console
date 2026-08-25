@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FolderKey, LayoutGrid, Monitor, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { JoinPrompt } from "@/components/join-prompt";
 
 const NAV = [
   { href: "/", label: "Fleet", icon: Monitor },
@@ -57,6 +58,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-full min-w-0 flex-1 flex-col pb-16 md:pb-0">
         {children}
       </div>
+
+      <JoinPrompt />
 
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/8 bg-[#161410]/95 backdrop-blur-md md:hidden">
         {NAV.map((item) => {

@@ -14,6 +14,7 @@ export async function GET() {
       jobs: [],
       software: [],
       softwareStatus: {},
+      pendingJoins: [],
       demoActive: snapshot.demoActive,
       pinRequired: true,
       unlocked: false,

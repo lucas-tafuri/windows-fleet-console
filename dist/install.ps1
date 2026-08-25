@@ -2,6 +2,7 @@
 # Logs: %TEMP%\fleet-console-install.log
 #       %LOCALAPPDATA%\FleetConsole\install.log
 #
+#   powershell -ExecutionPolicy Bypass -File install.ps1
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Server http://HOST:43123 -Token TOKEN
 #   or double-click install.cmd
 
@@ -38,6 +39,151 @@ function Save-LogCopy {
   } catch {}
 }
 
+function Test-FleetUrl {
+  param([string]$Url)
+  if (-not $Url) { return $false }
+  $u = ([string]$Url).Trim().TrimEnd("/")
+  try {
+    $r = Invoke-WebRequest -UseBasicParsing -Uri ($u + "/api/discover") -TimeoutSec 2
+    if ($r.StatusCode -eq 200 -and $r.Content -match '"ok"') { return $true }
+  } catch {}
+  return $false
+}
+
+function Get-LanIPv4 {
+  $list = @()
+  try {
+    $addrs = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+      Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' }
+    foreach ($a in $addrs) { $list += $a }
+  } catch {}
+  return $list
+}
+
+function Find-FleetByUdp {
+  $port = 43124
+  $payload = [Text.Encoding]::ASCII.GetBytes("FLEETDISC")
+  $targets = New-Object System.Collections.Generic.List[string]
+  [void]$targets.Add("255.255.255.255")
+  foreach ($a in Get-LanIPv4) {
+    if ($a.PrefixLength -eq 24) {
+      $p = $a.IPAddress.Split(".")
+      [void]$targets.Add(($p[0] + "." + $p[1] + "." + $p[2] + ".255"))
+    }
+  }
+  $udp = New-Object System.Net.Sockets.UdpClient
+  $udp.EnableBroadcast = $true
+  $udp.Client.ReceiveTimeout = 1500
+  try {
+    $deadline = (Get-Date).AddSeconds(8)
+    while ((Get-Date) -lt $deadline) {
+      foreach ($ip in $targets) {
+        try {
+          $ep = New-Object System.Net.IPEndPoint ([Net.IPAddress]::Parse($ip), $port)
+          [void]$udp.Send($payload, $payload.Length, $ep)
+        } catch {}
+      }
+      try {
+        $from = New-Object System.Net.IPEndPoint ([Net.IPAddress]::Any, 0)
+        $bytes = $udp.Receive([ref]$from)
+        $text = [Text.Encoding]::ASCII.GetString($bytes).Trim()
+        if ($text.StartsWith("FLEETHTTP ")) {
+          $url = $text.Substring(10).Trim().TrimEnd("/")
+          if (Test-FleetUrl $url) { return $url }
+        }
+      } catch {}
+    }
+  } finally {
+    $udp.Close()
+  }
+  return $null
+}
+
+function Find-FleetByScan {
+  $ips = New-Object System.Collections.Generic.List[string]
+  foreach ($a in Get-LanIPv4) {
+    [void]$ips.Add($a.IPAddress)
+    $p = $a.IPAddress.Split(".")
+    if ($p.Count -eq 4 -and $a.PrefixLength -eq 24) {
+      $base = $p[0] + "." + $p[1] + "." + $p[2]
+      foreach ($last in @(1, 2, 10, 20, 50, 80, 81, 100, 200, 254)) {
+        [void]$ips.Add($base + "." + $last)
+      }
+      try {
+        $hostNum = [int]$p[3]
+        for ($i = -8; $i -le 8; $i++) {
+          $n = $hostNum + $i
+          if ($n -ge 1 -and $n -le 254) { [void]$ips.Add($base + "." + $n) }
+        }
+      } catch {}
+    }
+  }
+  try {
+    $gw = (Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue | Select-Object -First 1).NextHop
+    if ($gw) { [void]$ips.Add($gw) }
+  } catch {}
+  try {
+    $arp = arp -a 2>$null
+    foreach ($line in $arp) {
+      if ($line -match "(\d+\.\d+\.\d+\.\d+)") { [void]$ips.Add($Matches[1]) }
+    }
+  } catch {}
+  $seen = @{}
+  foreach ($ip in $ips) {
+    if ($seen.ContainsKey($ip)) { continue }
+    $seen[$ip] = $true
+    $url = "http://" + $ip + ":43123"
+    if (Test-FleetUrl $url) { return $url }
+  }
+  return $null
+}
+
+function Find-FleetConsole {
+  Write-Host "Searching the LAN for Fleet Console..."
+  $found = Find-FleetByUdp
+  if ($found) {
+    Write-Host ("Found via broadcast: " + $found)
+    return $found
+  }
+  Write-Host "No UDP reply. Probing nearby hosts on port 43123..."
+  $found = Find-FleetByScan
+  if ($found) {
+    Write-Host ("Found via scan: " + $found)
+    return $found
+  }
+  throw "Could not find Fleet Console on the LAN. Open the dashboard on the host PC, allow the firewall, or pass -Server http://HOST:43123"
+}
+
+function Request-FleetApproval {
+  param([string]$Base)
+  $osName = "Windows"
+  try {
+    $osName = [string](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).Caption
+  } catch {}
+  $payload = @{
+    hostname = $env:COMPUTERNAME
+    user     = $env:USERNAME
+    os       = $osName
+  } | ConvertTo-Json -Compress
+  Write-Host ("Requesting approval as " + $env:COMPUTERNAME + " (" + $env:USERNAME + ")")
+  Write-Host "Approve this PC on the Fleet Console dashboard."
+  $created = Invoke-RestMethod -Method Post -Uri ($Base + "/api/join") -ContentType "application/json" -Body $payload
+  if (-not $created.id) { throw "Host did not accept the join request." }
+  $deadline = (Get-Date).AddMinutes(10)
+  while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 2
+    $st = Invoke-RestMethod -Uri ($Base + "/api/join/" + $created.id)
+    if ($st.status -eq "approved") {
+      if (-not $st.token) { throw "Host approved but sent no token." }
+      Write-Host "Approved."
+      return $st.token
+    }
+    if ($st.status -eq "denied") { throw "The host denied this PC." }
+    if ($st.status -eq "expired") { throw "Join request expired. Run the installer again." }
+  }
+  throw "Timed out waiting for the host to Approve this PC."
+}
+
 try {
   New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
   $stamp = Get-Date -Format o
@@ -52,15 +198,20 @@ try {
   Write-Host ""
 
   if (-not $Server) {
-    $Server = Read-Host "Fleet Console URL (example: http://192.168.1.10:43123)"
+    $Server = Find-FleetConsole
+  } else {
+    $Server = ([string]$Server).Trim().TrimEnd("/")
+    if (-not (Test-FleetUrl $Server)) {
+      Write-Host ("Warning: " + $Server + " did not answer /api/discover. Continuing anyway.")
+    }
   }
   if (-not $Token) {
-    $Token = Read-Host "Fleet token (from the Enroll page)"
+    $Token = Request-FleetApproval $Server
   }
   $Server = ([string]$Server).Trim().TrimEnd("/")
   $Token = ([string]$Token).Trim()
   if (-not $Server -or -not $Token) {
-    throw "Server URL and token are required. Run again and paste both."
+    throw "Could not get a console URL and token. Approve the PC on the host dashboard, or pass -Server and -Token."
   }
   Write-Host ("Server: " + $Server)
 

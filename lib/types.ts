@@ -124,11 +124,25 @@ export type MachineView = Machine & {
   lastSeenLabel: string;
 };
 
+export type JoinStatus = "pending" | "approved" | "denied";
+
+export type JoinRequest = {
+  id: string;
+  hostname: string;
+  user: string;
+  os: string;
+  ip: string;
+  createdAt: number;
+  status: JoinStatus;
+  decidedAt?: number;
+};
+
 export type FleetSnapshot = {
   machines: MachineView[];
   jobs: Job[];
   software: CatalogApp[];
   softwareStatus: SoftwareStatusMap;
+  pendingJoins: JoinRequest[];
   demoActive: boolean;
   pinRequired: boolean;
   unlocked: boolean;
@@ -142,4 +156,5 @@ export type StoreData = {
   jobs: Job[];
   software: CatalogApp[];
   softwareStatus: SoftwareStatusMap;
+  joins: JoinRequest[];
 };

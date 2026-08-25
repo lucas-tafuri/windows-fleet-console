@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type EnrollInfo = {
-  token: string;
   serverUrl: string;
   lanUrls?: string[];
   localhostHint?: boolean;
@@ -45,60 +44,28 @@ export default function EnrollPage() {
       </p>
       <h2 className="mt-1 text-2xl font-medium tracking-tight">Enroll a PC</h2>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Run the install script on a PC you own. It installs Git if needed,
-        downloads the agent, registers it at Windows logon, and starts it. The
-        agent phones home — no inbound ports on the PC.
+        Run the installer on a PC you own. It finds this console on the LAN,
+        then waits until you Approve it here. Keep this dashboard open.
       </p>
 
       {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
 
       <ol className="mt-8 grid gap-6">
-        <Step n="00" title="Console URL for other PCs">
+        <Step n="00" title="Keep the console reachable">
           <p>
-            Agents cannot use{" "}
-            <span className="font-mono">http://127.0.0.1:43123</span> unless
-            the console is running on that same PC. Use the address of the
-            machine that hosts this dashboard, port{" "}
-            <span className="font-mono">43123</span>.
+            The installer broadcasts on UDP{" "}
+            <span className="font-mono">43124</span> and checks HTTP{" "}
+            <span className="font-mono">43123</span>. If Windows Firewall
+            prompts, allow Fleet Console / Node on the private network.
           </p>
-          {info ? (
-            <div className="mt-3 grid gap-2">
-              <p className="text-xs tracking-wide text-muted-foreground uppercase">
-                Use this as -Server
-              </p>
-              <CopyBlock
-                value={info.serverUrl}
-                copied={copied === "url"}
-                onCopy={() => copy("url", info.serverUrl)}
-              />
-              {info.lanUrls && info.lanUrls.length > 0 ? (
-                <p className="font-mono text-[11px] text-foreground/80">
-                  Detected on this host: {info.lanUrls.join("  ·  ")}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  On the console host, run{" "}
-                  <span className="font-mono">ipconfig</span> (Windows) or{" "}
-                  <span className="font-mono">hostname -I</span> (Linux) and
-                  use <span className="font-mono">http://THAT_IP:43123</span>.
-                </p>
-              )}
-              {info.localhostHint &&
-              (!info.lanUrls || info.lanUrls.length === 0) ? (
-                <p className="text-xs text-load">
-                  This page was opened via localhost and no LAN IP was
-                  detected. Other machines will not reach 127.0.0.1.
-                </p>
-              ) : null}
-            </div>
+          {info?.lanUrls && info.lanUrls.length > 0 ? (
+            <p className="mt-2 font-mono text-[11px] text-foreground/80">
+              This host: {info.lanUrls.join("  ·  ")}
+            </p>
           ) : null}
         </Step>
-        <Step n="01" title="Run the install script on the PC">
-          From PowerShell. The window stays open and a log is written to{" "}
-          <span className="font-mono text-foreground/80">
-            %TEMP%\fleet-console-install.log
-          </span>
-          :
+        <Step n="01" title="Run the installer on the PC">
+          From PowerShell. No URL or token is required:
           {info?.oneLiner ? (
             <CopyBlock
               value={info.oneLiner}
@@ -110,7 +77,7 @@ export default function EnrollPage() {
           )}
           If you already copied{" "}
           <code className="font-mono text-foreground/90">dist\\install.cmd</code>{" "}
-          next to the exe, double-click it or:
+          next to the exe, double-click it:
           {info ? (
             <CopyBlock
               value={info.command}
@@ -119,12 +86,10 @@ export default function EnrollPage() {
             />
           ) : null}
         </Step>
-        <Step n="02" title="Startup is automatic">
-          The script (and the first agent launch) copies the exe to{" "}
-          <span className="font-mono text-foreground/80">
-            %LOCALAPPDATA%\FleetConsole
-          </span>{" "}
-          and registers a logon scheduled task, with a Startup-folder fallback.
+        <Step n="02" title="Approve the PC on this screen">
+          When the installer finds this console, a dialog asks to allow the
+          hostname, user, and IP. Deny unknown machines. After Approve, the
+          agent installs and starts at Windows logon.
           {info ? (
             <p className="mt-2 font-mono text-[11px] text-foreground/80">
               {info.scheduledTask}
@@ -132,7 +97,8 @@ export default function EnrollPage() {
           ) : null}
         </Step>
         <Step n="03" title="HTTP-only networks">
-          If a proxy eats WebSockets:
+          If a proxy eats WebSockets, add{" "}
+          <span className="font-mono">-HttpOnly</span>:
           {info ? (
             <CopyBlock
               value={info.pollFallback}
@@ -142,19 +108,6 @@ export default function EnrollPage() {
           ) : null}
         </Step>
       </ol>
-
-      {info ? (
-        <dl className="mt-8 grid gap-2 rounded-xl border border-white/8 bg-card/60 p-4 font-mono text-xs">
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Server</dt>
-            <dd>{info.serverUrl}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Token</dt>
-            <dd className="truncate">{info.token}</dd>
-          </div>
-        </dl>
-      ) : null}
     </div>
   );
 }
