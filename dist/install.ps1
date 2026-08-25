@@ -1,6 +1,6 @@
-# Fleet Console — Windows client install
-# Logs to %TEMP%\fleet-console-install.log and %LOCALAPPDATA%\FleetConsole\install.log
-# The window stays open until you press Enter.
+﻿# Fleet Console - Windows client install (ASCII only; Windows PowerShell 5.1)
+# Logs: %TEMP%\fleet-console-install.log
+#       %LOCALAPPDATA%\FleetConsole\install.log
 #
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Server http://HOST:43123 -Token TOKEN
 #   or double-click install.cmd
@@ -25,9 +25,10 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $here) { $here = (Get-Location).Path }
 $exitCode = 0
 
-function Write-Step($msg) {
+function Write-Step {
+  param([string]$Message)
   Write-Host ""
-  Write-Host ">> $msg" -ForegroundColor Yellow
+  Write-Host (">> " + $Message) -ForegroundColor Yellow
 }
 
 function Save-LogCopy {
@@ -39,14 +40,15 @@ function Save-LogCopy {
 
 try {
   New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
-  "=== Fleet Console install $(Get-Date -Format o) ===" | Set-Content -Path $logTemp -Encoding UTF8
+  $stamp = Get-Date -Format o
+  Set-Content -Path $logTemp -Encoding ASCII -Value ("=== Fleet Console install " + $stamp + " ===")
   try { Start-Transcript -Path $logTemp -Append -Force | Out-Null } catch {}
 
   Write-Host ""
   Write-Host "Fleet Console client installer" -ForegroundColor Cyan
-  Write-Host "Log file: $logTemp"
-  Write-Host "Also:     $logLocal"
-  Write-Host "Folder:   $here"
+  Write-Host ("Log file: " + $logTemp)
+  Write-Host ("Also:     " + $logLocal)
+  Write-Host ("Folder:   " + $here)
   Write-Host ""
 
   if (-not $Server) {
@@ -55,25 +57,28 @@ try {
   if (-not $Token) {
     $Token = Read-Host "Fleet token (from the Enroll page)"
   }
-  $Server = "$Server".Trim().TrimEnd("/")
-  $Token = "$Token".Trim()
+  $Server = ([string]$Server).Trim().TrimEnd("/")
+  $Token = ([string]$Token).Trim()
   if (-not $Server -or -not $Token) {
     throw "Server URL and token are required. Run again and paste both."
   }
-  Write-Host "Server: $Server"
+  Write-Host ("Server: " + $Server)
 
   $haveGit = $false
   if (Get-Command git -ErrorAction SilentlyContinue) {
     $haveGit = $true
     Write-Step "Git is already installed"
   } else {
-    Write-Step "Git not found — trying winget (this can take a minute)"
+    Write-Step "Git not found - trying winget (this can take a minute)"
     if (Get-Command winget -ErrorAction SilentlyContinue) {
       & winget install -e --id Git.Git --accept-package-agreements --accept-source-agreements --silent
-      $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-        [Environment]::GetEnvironmentVariable("Path", "User")
-      $gitProg = Join-Path ${env:ProgramFiles} "Git\cmd"
-      if (Test-Path $gitProg) { $env:Path = "$gitProg;$env:Path" }
+      $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+      $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+      $env:Path = $machinePath + ";" + $userPath
+      $gitProg = Join-Path $env:ProgramFiles "Git\cmd"
+      if (Test-Path $gitProg) {
+        $env:Path = $gitProg + ";" + $env:Path
+      }
       $haveGit = [bool](Get-Command git -ErrorAction SilentlyContinue)
     }
     if (-not $haveGit) {
@@ -91,18 +96,18 @@ try {
   if (-not (Test-Path $exe)) {
     throw "fleet-agent.exe is missing and download failed."
   }
-  Write-Host "Agent: $exe"
+  Write-Host ("Agent: " + $exe)
 
   if ($haveGit) {
     Write-Step "Fetching the fleet repo (for later Update / git pull)"
     if (Test-Path (Join-Path $repoDir ".git")) {
-      & git -C $repoDir pull --ff-only origin main 2>&1 | ForEach-Object { Write-Host "   $_" }
+      & git -C $repoDir pull --ff-only origin main 2>&1 | ForEach-Object { Write-Host ("   " + $_) }
     } else {
       if (Test-Path $repoDir) { Remove-Item -Recurse -Force $repoDir }
-      & git clone --depth 1 --branch main $Repo $repoDir 2>&1 | ForEach-Object { Write-Host "   $_" }
+      & git clone --depth 1 --branch main $Repo $repoDir 2>&1 | ForEach-Object { Write-Host ("   " + $_) }
     }
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-      Write-Host "Git clone/pull failed (exit $LASTEXITCODE). Continuing with the agent anyway."
+      Write-Host ("Git clone/pull failed (exit " + $LASTEXITCODE + "). Continuing with the agent anyway.")
     }
   }
 
@@ -110,9 +115,9 @@ try {
   if ($HttpOnly) { $argList += "--http-only" }
 
   Write-Step "Starting the agent (copies itself to LocalAppData and registers at logon)"
-  Write-Host "Command: $exe $($argList -join ' ')"
+  Write-Host ("Command: " + $exe + " " + ($argList -join " "))
   & $exe @argList
-  Write-Host "Agent first-launch exit code: $LASTEXITCODE"
+  Write-Host ("Agent first-launch exit code: " + $LASTEXITCODE)
 
   Start-Sleep -Seconds 2
   $running = Get-Process -Name "fleet-agent" -ErrorAction SilentlyContinue
@@ -121,14 +126,14 @@ try {
 
   Write-Host ""
   if ($running) {
-    Write-Host "SUCCESS — fleet-agent is running." -ForegroundColor Green
+    Write-Host "SUCCESS - fleet-agent is running." -ForegroundColor Green
   } else {
     Write-Host "The agent process is not visible yet." -ForegroundColor Yellow
     Write-Host "Check Task Manager for fleet-agent.exe, or run the exe again."
   }
-  Write-Host "  install folder : $installRoot"
-  if (Test-Path $installed) { Write-Host "  installed exe  : $installed" }
-  Write-Host "  server         : $Server"
+  Write-Host ("  install folder : " + $installRoot)
+  if (Test-Path $installed) { Write-Host ("  installed exe  : " + $installed) }
+  Write-Host ("  server         : " + $Server)
   if ($task) {
     Write-Host "  logon task     : Fleet Console Agent (registered)"
   } else {
@@ -142,7 +147,7 @@ catch {
   Write-Host "INSTALL FAILED" -ForegroundColor Red
   Write-Host $_.Exception.Message
   if ($_.ScriptStackTrace) { Write-Host $_.ScriptStackTrace }
-  Add-Content -Path $logTemp -Value "FAILED: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+  try { Add-Content -Path $logTemp -Value ("FAILED: " + $_.Exception.Message) } catch {}
 }
 finally {
   try { Stop-Transcript | Out-Null } catch {}

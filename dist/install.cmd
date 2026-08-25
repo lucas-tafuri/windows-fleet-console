@@ -3,7 +3,7 @@ title Fleet Console installer
 cd /d "%~dp0"
 echo.
 echo ========================================
-echo  Fleet Console — Windows client install
+echo  Fleet Console - Windows client install
 echo ========================================
 echo Folder: %CD%
 echo Log:    %TEMP%\fleet-console-install.log
