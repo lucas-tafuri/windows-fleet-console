@@ -1,0 +1,122 @@
+export type MachineStatus =
+  | "online"
+  | "under_load"
+  | "frozen"
+  | "offline"
+  | "limited";
+
+export type Transport = "ws" | "poll" | "demo";
+
+export type MappedDrive = {
+  letter: string;
+  path: string;
+};
+
+export type Machine = {
+  id: string;
+  hostname: string;
+  user: string;
+  os: string;
+  demo: boolean;
+  lastSeen: number;
+  cpu: number | null;
+  memory: number | null;
+  frozenHint: boolean;
+  metricsLimited: boolean;
+  lastInputAgeMs: number | null;
+  mappedDrives: MappedDrive[];
+  transport: Transport;
+};
+
+export type JobKind =
+  | "install"
+  | "uninstall"
+  | "check"
+  | "map_drive"
+  | "unmap_drive"
+  | "clean_downloads"
+  | "empty_recycle"
+  | "launch";
+
+export type JobResultStatus = "queued" | "running" | "ok" | "error";
+
+export type JobResult = {
+  machineId: string;
+  hostname: string;
+  status: JobResultStatus;
+  via?: string;
+  message: string;
+  output?: string;
+  startedAt?: number;
+  finishedAt?: number;
+};
+
+export type JobPayload = {
+  package?: string;
+  letter?: string;
+  unc?: string;
+  username?: string;
+  password?: string;
+  target?: string;
+  args?: string;
+};
+
+export type Job = {
+  id: string;
+  kind: JobKind;
+  createdAt: number;
+  payload: JobPayload;
+  machineIds: string[];
+  results: Record<string, JobResult>;
+  status: "queued" | "running" | "done";
+};
+
+export type AssignedJob = {
+  id: string;
+  kind: JobKind;
+  payload: JobPayload;
+};
+
+export type Heartbeat = {
+  token?: string;
+  machineId?: string;
+  hostname: string;
+  user?: string;
+  os?: string;
+  cpu?: number | null;
+  memory?: number | null;
+  frozen?: boolean;
+  metricsLimited?: boolean;
+  lastInputAgeMs?: number | null;
+  mappedDrives?: MappedDrive[];
+  results?: AgentJobResult[];
+};
+
+export type AgentJobResult = {
+  jobId: string;
+  status: "ok" | "error";
+  via?: string;
+  message: string;
+  output?: string;
+};
+
+export type MachineView = Machine & {
+  status: MachineStatus;
+  lastSeenLabel: string;
+};
+
+export type FleetSnapshot = {
+  machines: MachineView[];
+  jobs: Job[];
+  demoActive: boolean;
+  pinRequired: boolean;
+  unlocked: boolean;
+  unprotected: boolean;
+  serverTime: number;
+};
+
+export type StoreData = {
+  fleetToken: string;
+  machines: Record<string, Machine>;
+  jobs: Job[];
+};

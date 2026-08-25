@@ -1,0 +1,91 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+)
+
+func main() {
+	server := flag.String("server", "", "Fleet Console URL, e.g. http://192.168.1.10:43123")
+	token := flag.String("token", "", "Fleet token from the Enroll page")
+	httpOnly := flag.Bool("http-only", false, "Skip WebSocket and use HTTP poll only")
+	dataDir := flag.String("data-dir", "", "Directory for machine-id (default: %LOCALAPPDATA%\\FleetConsole)")
+	flag.Parse()
+
+	if *server == "" || *token == "" {
+		fmt.Fprintln(os.Stderr, "usage: fleet-agent.exe --server http://host:43123 --token <token>")
+		os.Exit(2)
+	}
+
+	dir := *dataDir
+	if dir == "" {
+		base, err := os.UserCacheDir()
+		if err != nil {
+			base, _ = os.UserHomeDir()
+		}
+		dir = filepath.Join(base, "FleetConsole")
+	}
+	_ = os.MkdirAll(dir, 0o755)
+	idPath := filepath.Join(dir, "machine-id")
+
+	id, _ := os.ReadFile(idPath)
+	machineID := string(bytesTrim(id))
+
+	client := &Client{
+		Server:    trimSlash(*server),
+		Token:     *token,
+		HTTPOnly:  *httpOnly,
+		MachineID: machineID,
+		OnID: func(id string) {
+			_ = os.WriteFile(idPath, []byte(id), 0o600)
+		},
+	}
+
+	fmt.Printf("Fleet agent → %s (ws=%v)\n", client.Server, !*httpOnly)
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-stop
+		os.Exit(0)
+	}()
+
+	backoff := time.Second
+	for {
+		err := client.RunOnce()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "agent: %v\n", err)
+		}
+		time.Sleep(backoff)
+		if backoff < 15*time.Second {
+			backoff *= 2
+		}
+		if backoff > 15*time.Second {
+			backoff = 15 * time.Second
+		}
+	}
+}
+
+func trimSlash(s string) string {
+	for len(s) > 0 && s[len(s)-1] == '/' {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
+func bytesTrim(b []byte) []byte {
+	i, j := 0, len(b)
+	for i < j && (b[i] == ' ' || b[i] == '\n' || b[i] == '\r' || b[i] == '\t') {
+		i++
+	}
+	for j > i && (b[j-1] == ' ' || b[j-1] == '\n' || b[j-1] == '\r' || b[j-1] == '\t') {
+		j--
+	}
+	return b[i:j]
+}

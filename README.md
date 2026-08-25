@@ -1,0 +1,80 @@
+# Fleet Console
+
+A lightweight control plane for Windows PCs you own. The web UI shows live status (online, under load, frozen, offline) and runs bulk jobs: install/uninstall/check software, map/unmap drives, clean Downloads, empty the Recycle Bin, and launch a program.
+
+The dashboard is one Node process. Each PC runs a small Go agent that **phones home** (no inbound ports on the machines).
+
+## Run the console
+
+```bash
+npm install
+npm run dev
+```
+
+Opens on [http://127.0.0.1:43123](http://127.0.0.1:43123). Until a real agent connects, three simulated PCs are shown so every action can be tried.
+
+```bash
+npm run build
+npm start
+```
+
+Optional env (unset is fine — first run generates a fleet token and stays unlocked):
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Bind port (default `43123`) |
+| `HOST` | Bind address (default `0.0.0.0`) |
+| `FLEET_TOKEN` | Shared secret agents must present |
+| `DASHBOARD_PIN` | Optional PIN gate for the web UI |
+| `FLEET_PUBLIC_URL` | Public URL printed on the Enroll page |
+| `FLEET_TLS` | Set `1` if the console is behind HTTPS |
+
+State lives in `data/fleet.json` (atomic writes, no database).
+
+## Enroll a Windows PC
+
+1. Build the agent (from Linux/macOS/Windows with Go):
+
+   ```bash
+   npm run build:agent
+   ```
+
+   Output: `dist/fleet-agent.exe` (~5 MB, `CGO_ENABLED=0`).
+
+2. Copy the exe to the PC. On the Enroll page, copy the run command:
+
+   ```text
+   fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN
+   ```
+
+3. Keep it in the **signed-in user session** (logon scheduled task with highest privileges, or a Start Menu shortcut). That is how mapped drives, launching apps, Downloads, and Recycle Bin hit the person at the keyboard. Software install needs that user to be an administrator.
+
+HTTP-only fallback if a proxy eats WebSockets:
+
+```text
+fleet-agent.exe --server http://YOUR_CONSOLE:43123 --token YOUR_TOKEN --http-only
+```
+
+## Fallbacks
+
+| Area | Preferred | Then |
+|---|---|---|
+| Agent transport | WebSocket `/api/agent/ws` | HTTP poll `POST /api/agent/poll` |
+| Browser live updates | WebSocket `/api/ui/ws` | REST poll every 2s |
+| Software | winget | Uninstall registry / Get-Package (detect). Install/uninstall require winget |
+| Drives | `net use` | `WNetAddConnection2` / `WNetCancelConnection2` |
+| Recycle Bin | `SHEmptyRecycleBin` | Shell.Application / `Clear-RecycleBin` |
+| Launch | `ShellExecute` | `cmd /c start`, PATH and Program Files search |
+| Status | CPU + RAM + hung windows | Memory only, or **Limited** if counters fail. Frozen is never inferred from high CPU alone |
+
+## Status rules
+
+- **Offline** — no heartbeat for 20 seconds
+- **Frozen** — agent alive and an interactive window is hung
+- **Under load** — CPU ≥ 85% or memory ≥ 90%
+- **Limited** — connected, but metrics APIs failed
+- **Online** — none of the above
+
+## What this is not
+
+Not remote desktop, not a file manager, not a stealth implant. The agent is a named process plus an optional scheduled task, for machines you enroll yourself.
