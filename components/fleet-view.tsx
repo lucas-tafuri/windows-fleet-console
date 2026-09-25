@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   Search,
   Monitor,
   Plus,
@@ -19,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ActionSheet, type ActionKey } from "@/components/action-sheet";
 import { Meter } from "@/components/meter";
 import { StatusLamp } from "@/components/status-lamp";
-import { JobResults } from "@/components/job-results";
+import { fleetCapacity } from "@/lib/fleet-layout";
 import { useFleet } from "@/hooks/use-fleet";
 import { STATUS_LABEL } from "@/lib/status";
 import type { Job, MachineStatus, MachineView } from "@/lib/types";
@@ -36,6 +38,18 @@ const FILTERS: Array<{ id: "all" | MachineStatus; label: string }> = [
 
 export function FleetView() {
   const { data, loading, error, transport, busy, submitJob } = useFleet();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [capacity, setCapacity] = useState(8);
+  const [page, setPage] = useState(0);
+  useEffect(() => {
+    const element = contentRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setCapacity(fleetCapacity(entry.contentRect.width, entry.contentRect.height));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | MachineStatus>("all");
   const [selected, setSelected] = useState<string[]>([]);
@@ -61,12 +75,16 @@ export function FleetView() {
     return data.jobs[0] || null;
   }, [data.jobs, lastJob]);
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / capacity));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visibleMachines = filtered.slice(currentPage * capacity, (currentPage + 1) * capacity);
+
   const allFilteredSelected =
-    filtered.length > 0 && filtered.every((m) => selected.includes(m.id));
+    visibleMachines.length > 0 && visibleMachines.every((m) => selected.includes(m.id));
 
   function toggleAll(next: boolean) {
-    if (next) setSelected((cur) => Array.from(new Set([...cur, ...filtered.map((m) => m.id)])));
-    else setSelected((cur) => cur.filter((id) => !filtered.some((m) => m.id === id)));
+    if (next) setSelected((cur) => Array.from(new Set([...cur, ...visibleMachines.map((m) => m.id)])));
+    else setSelected((cur) => cur.filter((id) => !visibleMachines.some((m) => m.id === id)));
   }
 
   function toggleOne(id: string, next: boolean) {
@@ -81,8 +99,8 @@ export function FleetView() {
   }
 
   return (
-    <div className="flex min-h-full min-w-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col">
+    <div className="fleet-screen">
+      <div className="fleet-screen-inner">
         {data.demoActive ? (
           <div className="border-b border-primary/25 bg-primary/10 px-4 py-2 text-center text-xs text-primary md:text-left">
             Simulated PCs are shown so you can exercise every action. They
@@ -125,20 +143,20 @@ export function FleetView() {
         </div>
         <div className="fleet-toolbar">
           <div className="flex flex-wrap gap-1" aria-label="Filter machines">
-            {FILTERS.map((f) => <button key={f.id} type="button" onClick={() => setFilter(f.id)} aria-pressed={filter === f.id}
+            {FILTERS.map((f) => <button key={f.id} type="button" onClick={() => { setFilter(f.id); setPage(0); }} aria-pressed={filter === f.id}
               className={cn("fleet-filter", filter === f.id && "fleet-filter-active")}>
               {f.label}<span className="tabular">{counts[f.id] || 0}</span>
             </button>)}
           </div>
           <label className="fleet-search"><Search className="size-4 shrink-0" />
-            <input aria-label="Search machines" placeholder="Search machines or users…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input aria-label="Search machines" placeholder="Search machines or users…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
           </label>
         </div>
         <div className="fleet-list-heading">
-          <label className="flex cursor-pointer items-center gap-2"><Checkbox checked={allFilteredSelected} onCheckedChange={(v) => toggleAll(Boolean(v))} aria-label="Select all visible machines" />Select all</label>
+          <label className="flex cursor-pointer items-center gap-2"><Checkbox checked={allFilteredSelected} onCheckedChange={(v) => toggleAll(Boolean(v))} aria-label="Select machines on this page" />Select page</label>
           <span>{filtered.length} machines{selected.length > 0 ? ` · ${selected.length} selected` : ""}</span>
         </div>
-        <div className="min-h-0 flex-1 px-4 pb-44 md:px-6">
+        <div ref={contentRef} className="fleet-content">
           {loading ? (
             <EmptyState title="Listening for machines">
               Heartbeats arrive every few seconds.
@@ -152,24 +170,26 @@ export function FleetView() {
                 : "Try a different search or status filter."}
             </EmptyState>
           ) : (
-            <div className="fleet-machine-grid">{filtered.map((machine) => (
+            <div className="fleet-machine-grid">{visibleMachines.map((machine) => (
               <MachineCard key={machine.id} machine={machine} checked={selected.includes(machine.id)} onChecked={(v) => toggleOne(machine.id, v)} />
             ))}</div>
           )}
-          {liveJob ? <details className="fleet-job-panel mt-6">
-            <summary className="cursor-pointer px-5 py-4 text-sm font-medium">Latest activity <span className="ml-2 text-xs text-muted-foreground">View job results</span></summary>
-            <div className="border-t border-white/8 p-5"><JobResults job={liveJob} /></div>
-          </details> : null}
+        </div>
+        <div className="fleet-pagination">
+          <Link href="/jobs" className="text-muted-foreground hover:text-primary">View activity →</Link>
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground">{filtered.length ? `${currentPage * capacity + 1}–${Math.min((currentPage + 1) * capacity, filtered.length)} of ${filtered.length}` : "0 machines"}</span>
+            {pageCount > 1 ? <>
+              <Button variant="outline" size="icon-sm" aria-label="Previous machines" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><ChevronLeft /></Button>
+              <span>Page {currentPage + 1} / {pageCount}</span>
+              <Button variant="outline" size="icon-sm" aria-label="Next machines" disabled={currentPage === pageCount - 1} onClick={() => setPage(currentPage + 1)}><ChevronRight /></Button>
+            </> : null}
+          </div>
         </div>
 
         <div
           hidden={selected.length === 0}
-          className={cn(
-            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-sidebar/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6",
-            selected.length === 0
-              ? "pointer-events-none translate-y-4 opacity-0"
-              : "opacity-100"
-          )}
+          className="fleet-action-dock"
         >
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-2 font-mono text-[11px] text-primary">

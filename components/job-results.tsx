@@ -7,19 +7,19 @@ import { cn } from "@/lib/utils";
 export function JobResults({ job }: { job: Job }) {
   const rows = Object.values(job.results);
   return (
-    <div className="flex flex-col gap-2">
+    <div className="job-results flex min-w-0 flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium">{JOB_LABEL[job.kind]}</p>
-        <p className="font-mono text-[11px] text-muted-foreground">{job.id}</p>
+        <p className="max-w-32 truncate font-mono text-[10px] text-muted-foreground" title={job.id}>{job.id}</p>
       </div>
       <ul className="flex flex-col gap-1.5">
         {rows.map((row) => (
           <li
             key={row.machineId}
-            className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 transition-opacity duration-150"
+            className="rounded-xl border border-white/8 bg-black/10 px-4 py-3 transition-opacity duration-150"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-xs">{row.hostname}</span>
+              <span className="min-w-0 truncate text-xs font-semibold" title={row.hostname}>{row.hostname}</span>
               <span
                 className={cn(
                   "font-mono text-[10px] tracking-wide uppercase",
@@ -29,19 +29,20 @@ export function JobResults({ job }: { job: Job }) {
                   row.status === "queued" && "text-muted-foreground"
                 )}
               >
-                {row.status}
+                {row.status === "ok" ? "Complete" : row.status}
               </span>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{row.message}</p>
+            <p className="mt-2 break-words text-xs leading-relaxed text-muted-foreground">{row.message}</p>
             {row.via ? (
               <p className="mt-0.5 font-mono text-[10px] text-primary/80">
                 via {row.via}
               </p>
             ) : null}
             {row.output ? (
-              <pre className="mt-2 max-h-24 overflow-auto font-mono text-[10px] leading-relaxed text-foreground/70">
-                {row.output}
-              </pre>
+              <details className="job-log mt-3">
+                <summary className="cursor-pointer text-[11px] text-muted-foreground">View output</summary>
+                <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-black/20 p-3 font-mono text-[10px] leading-relaxed text-foreground/70">{row.output}</pre>
+              </details>
             ) : null}
           </li>
         ))}
