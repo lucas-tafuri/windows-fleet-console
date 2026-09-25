@@ -18,22 +18,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-full flex-col md:flex-row">
-      <aside className="hidden border-r border-white/8 bg-sidebar md:flex md:w-52 md:flex-col">
-        <div className="px-5 pt-6 pb-4">
+      <aside className="sticky top-0 hidden h-screen shrink-0 border-r border-white/8 bg-sidebar md:flex md:w-52 md:flex-col">
+        <div className="border-b border-white/8 px-5 pt-7 pb-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/pds-logo.png"
             alt=""
             width={130}
             height={237}
-            className="h-12 w-auto"
+            className="h-9 w-auto"
           />
           <h1 className="mt-3 text-[15px] font-medium tracking-tight">
             PrettyDamnFleet
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground">Windows ops</p>
+          <p className="mt-2 text-[9px] tracking-[0.15em] text-muted-foreground">DEVICE MANAGEMENT</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3">
+        <nav className="flex flex-1 flex-col gap-1 px-3 pt-6">
           {NAV.map((item) => {
             const active =
               item.href === "/"
@@ -44,10 +44,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors duration-150",
+                  "flex items-center gap-3 rounded-lg px-3 py-3 text-sm transition-colors duration-150",
                   active
-                    ? "bg-accent text-primary"
+                    ? "bg-accent text-primary shadow-[inset_2px_0_0_var(--primary)]"
                     : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
                 )}
               >
@@ -58,7 +59,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <p className="px-5 py-4 font-mono text-[10px] text-muted-foreground/80">
-          Local control plane
+          PrettyDamnFleet · Windows
         </p>
       </aside>
 
@@ -79,6 +80,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
+                aria-current={active ? "page" : undefined}
               className={cn(
                 "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px]",
                 active ? "text-primary" : "text-muted-foreground"

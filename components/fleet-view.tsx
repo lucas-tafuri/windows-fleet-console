@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import {
+  Search,
+  Monitor,
+  Plus,
   FolderDown,
   HardDrive,
   Package,
@@ -10,7 +13,7 @@ import {
   Trash2,
   Unplug,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ActionSheet, type ActionKey } from "@/components/action-sheet";
@@ -33,15 +36,17 @@ const FILTERS: Array<{ id: "all" | MachineStatus; label: string }> = [
 
 export function FleetView() {
   const { data, loading, error, transport, busy, submitJob } = useFleet();
+  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | MachineStatus>("all");
   const [selected, setSelected] = useState<string[]>([]);
   const [action, setAction] = useState<ActionKey | null>(null);
   const [lastJob, setLastJob] = useState<Job | null>(null);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return data.machines;
-    return data.machines.filter((m) => m.status === filter);
-  }, [data.machines, filter]);
+    const query = search.trim().toLowerCase();
+    return data.machines.filter((m) => (filter === "all" || m.status === filter) &&
+      `${m.hostname} ${m.user} ${m.os}`.toLowerCase().includes(query));
+  }, [data.machines, filter, search]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: data.machines.length };
@@ -60,7 +65,7 @@ export function FleetView() {
     filtered.length > 0 && filtered.every((m) => selected.includes(m.id));
 
   function toggleAll(next: boolean) {
-    if (next) setSelected(filtered.map((m) => m.id));
+    if (next) setSelected((cur) => Array.from(new Set([...cur, ...filtered.map((m) => m.id)])));
     else setSelected((cur) => cur.filter((id) => !filtered.some((m) => m.id === id)));
   }
 
@@ -92,38 +97,48 @@ export function FleetView() {
           </div>
         ) : null}
 
-        <header className="flex flex-wrap items-end justify-between gap-3 px-4 pt-5 pb-3 md:px-6">
+        <header className="fleet-heading">
           <div>
-            <p className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
-              Machines · {transport === "ws" ? "live socket" : "http poll"}
-            </p>
-            <h2 className="mt-1 text-2xl font-medium tracking-tight">Fleet</h2>
+            <p className="fleet-eyebrow">WORKSPACE / OVERVIEW</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight">Your fleet<span className="text-primary">.</span></h2>
+            <p className="mt-2 text-sm text-muted-foreground">Every machine. One clear view.</p>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => {
-              const n = f.id === "all" ? counts.all : counts[f.id] || 0;
-              const on = filter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFilter(f.id)}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-[11px] transition-colors duration-150",
-                    on
-                      ? "border-primary/40 bg-accent text-primary"
-                      : "border-white/8 text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {f.label}
-                  <span className="tabular ml-1.5 font-mono">{n}</span>
-                </button>
-              );
-            })}
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={cn("fleet-connection", error ? "text-frozen" : "text-online")}>
+              <span className="size-1.5 rounded-full bg-current" />
+              {error ? "Disconnected" : loading ? "Connecting" : "Live updates"}<span className="sr-only">{transport}</span>
+            </span>
+            <Link href="/enroll" className="fleet-add"><Plus className="size-4" /> Add machine</Link>
           </div>
         </header>
-
-        <div className="min-h-0 flex-1 overflow-auto px-4 pb-8 md:px-6">
+        <div className="fleet-overview" aria-label="Fleet summary">
+          {[
+            { label: "Total machines", value: counts.all, note: "In your workspace", color: "text-foreground" },
+            { label: "Connected", value: counts.all - (counts.offline || 0), note: "Reporting to the console", color: "text-online" },
+            { label: "Needs attention", value: (counts.under_load || 0) + (counts.frozen || 0) + (counts.limited || 0), note: "Load, frozen or limited", color: "text-load" },
+            { label: "Offline", value: counts.offline || 0, note: "Not currently reporting", color: "text-muted-foreground" },
+          ].map((stat) => <div className="fleet-stat" key={stat.label}>
+            <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
+            <p className={cn("mt-2 text-3xl font-semibold tabular tracking-tight", stat.color)}>{loading || error ? "—" : stat.value}</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">{stat.note}</p>
+          </div>)}
+        </div>
+        <div className="fleet-toolbar">
+          <div className="flex flex-wrap gap-1" aria-label="Filter machines">
+            {FILTERS.map((f) => <button key={f.id} type="button" onClick={() => setFilter(f.id)} aria-pressed={filter === f.id}
+              className={cn("fleet-filter", filter === f.id && "fleet-filter-active")}>
+              {f.label}<span className="tabular">{counts[f.id] || 0}</span>
+            </button>)}
+          </div>
+          <label className="fleet-search"><Search className="size-4 shrink-0" />
+            <input aria-label="Search machines" placeholder="Search machines or users…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+        </div>
+        <div className="fleet-list-heading">
+          <label className="flex cursor-pointer items-center gap-2"><Checkbox checked={allFilteredSelected} onCheckedChange={(v) => toggleAll(Boolean(v))} aria-label="Select all visible machines" />Select all</label>
+          <span>{filtered.length} machines{selected.length > 0 ? ` · ${selected.length} selected` : ""}</span>
+        </div>
+        <div className="min-h-0 flex-1 px-4 pb-44 md:px-6">
           {loading ? (
             <EmptyState title="Listening for machines">
               Heartbeats arrive every few seconds.
@@ -134,81 +149,23 @@ export function FleetView() {
             <EmptyState title={data.machines.length === 0 ? "No machines yet" : "Nothing in this filter"}>
               {data.machines.length === 0
                 ? "Open Enroll, copy the agent command, and run it on a Windows PC."
-                : "Try another status, or select All."}
+                : "Try a different search or status filter."}
             </EmptyState>
           ) : (
-            <>
-              <div className="hidden overflow-x-auto rounded-xl border border-white/8 bg-card/80 xl:block">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-white/8 text-[11px] tracking-wide text-muted-foreground uppercase">
-                    <tr>
-                      <th className="w-10 px-3 py-2.5">
-                        <Checkbox
-                          checked={allFilteredSelected}
-                          onCheckedChange={(v) => toggleAll(Boolean(v))}
-                          aria-label="Select all"
-                        />
-                      </th>
-                      <th className="px-2 py-2.5 font-medium">Host</th>
-                      <th className="px-2 py-2.5 font-medium">User</th>
-                      <th className="px-2 py-2.5 font-medium">Status</th>
-                      <th className="px-2 py-2.5 font-medium">CPU</th>
-                      <th className="px-2 py-2.5 font-medium">Memory</th>
-                      <th className="px-2 py-2.5 font-medium">GPU</th>
-                      <th className="px-2 py-2.5 font-medium">Seen</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((m) => (
-                      <MachineRow
-                        key={m.id}
-                        machine={m}
-                        checked={selected.includes(m.id)}
-                        onChecked={(v) => toggleOne(m.id, v)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="grid gap-2 xl:hidden">
-                {filtered.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggleOne(m.id, !selected.includes(m.id))}
-                    className={cn(
-                      "rounded-xl border bg-card/80 p-3 text-left transition-colors duration-150",
-                      selected.includes(m.id)
-                        ? "border-primary/50 bg-accent/40"
-                        : "border-white/8"
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-2 font-mono text-sm">
-                        <StatusLamp status={m.status} />
-                        {m.hostname}
-                      </span>
-                      <Badge variant="outline">{STATUS_LABEL[m.status]}</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {m.user || "no interactive user"} · {m.lastSeenLabel}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-4">
-                      <Meter label="CPU" value={m.cpu} />
-                      <Meter label="RAM" value={m.memory} />
-                      <Meter label="GPU" value={m.gpu ?? null} />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </>
+            <div className="fleet-machine-grid">{filtered.map((machine) => (
+              <MachineCard key={machine.id} machine={machine} checked={selected.includes(machine.id)} onChecked={(v) => toggleOne(machine.id, v)} />
+            ))}</div>
           )}
+          {liveJob ? <details className="fleet-job-panel mt-6">
+            <summary className="cursor-pointer px-5 py-4 text-sm font-medium">Latest activity <span className="ml-2 text-xs text-muted-foreground">View job results</span></summary>
+            <div className="border-t border-white/8 p-5"><JobResults job={liveJob} /></div>
+          </details> : null}
         </div>
 
         <div
+          hidden={selected.length === 0}
           className={cn(
-            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-sidebar/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6 2xl:right-80",
+            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-sidebar/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6",
             selected.length === 0
               ? "pointer-events-none translate-y-4 opacity-0"
               : "opacity-100"
@@ -237,24 +194,6 @@ export function FleetView() {
         </div>
       </div>
 
-      <aside className="hidden w-80 shrink-0 border-l border-white/8 bg-card/40 2xl:flex 2xl:flex-col">
-        <div className="border-b border-white/8 px-4 py-4">
-          <p className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
-            Live rail
-          </p>
-          <h3 className="mt-1 text-sm font-medium">Latest job</h3>
-        </div>
-        <div className="flex-1 overflow-auto p-4">
-          {liveJob ? (
-            <JobResults job={liveJob} />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Select machines and run an action. Per-PC results land here,
-              including which fallback ran.
-            </p>
-          )}
-        </div>
-      </aside>
 
       <ActionSheet
         open={action !== null}
@@ -290,80 +229,34 @@ function DockBtn({
   );
 }
 
-function MachineRow({
-  machine,
-  checked,
-  onChecked,
-}: {
-  machine: MachineView;
-  checked: boolean;
-  onChecked: (next: boolean) => void;
+function MachineCard({ machine, checked, onChecked }: {
+  machine: MachineView; checked: boolean; onChecked: (next: boolean) => void;
 }) {
-  return (
-    <tr
-      className={cn(
-        "border-b border-white/6 transition-colors duration-150 last:border-0",
-        checked ? "bg-accent/35" : "hover:bg-white/3"
-      )}
-    >
-      <td className="px-3 py-3">
-        <Checkbox
-          checked={checked}
-          onCheckedChange={(v) => onChecked(Boolean(v))}
-          aria-label={`Select ${machine.hostname}`}
-        />
-      </td>
-      <td className="px-2 py-3">
-        <div className="flex items-center gap-2">
-          <StatusLamp status={machine.status} />
-          <span className="font-mono text-[13px]">{machine.hostname}</span>
-          {machine.demo ? (
-            <span className="font-mono text-[10px] text-primary/80">demo</span>
-          ) : (
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {machine.transport}
-            </span>
-          )}
-        </div>
-        {machine.mappedDrives.length > 0 ? (
-          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-            {machine.mappedDrives
-              .map((d) => `${d.letter}: ${d.path}`)
-              .join(" · ")}
-          </p>
-        ) : null}
-      </td>
-      <td className="px-2 py-3 text-xs text-muted-foreground">
-        {machine.user || "—"}
-      </td>
-      <td className="px-2 py-3">
-        <span
-          className={cn(
-            "text-xs",
-            machine.status === "online" && "text-online",
-            machine.status === "under_load" && "text-load",
-            machine.status === "frozen" && "text-frozen",
-            machine.status === "offline" && "text-offline",
-            machine.status === "limited" && "text-limited"
-          )}
-        >
-          {STATUS_LABEL[machine.status]}
-        </span>
-      </td>
-      <td className="px-2 py-3">
-        <Meter label="CPU" value={machine.cpu} />
-      </td>
-      <td className="px-2 py-3">
-        <Meter label="RAM" value={machine.memory} />
-      </td>
-      <td className="px-2 py-3">
-        <Meter label="GPU" value={machine.gpu ?? null} />
-      </td>
-      <td className="tabular px-2 py-3 font-mono text-[11px] text-muted-foreground">
-        {machine.lastSeenLabel}
-      </td>
-    </tr>
-  );
+  const offline = machine.status === "offline";
+  return <button type="button" aria-pressed={checked} aria-label={`Select ${machine.hostname}`}
+    onClick={() => onChecked(!checked)} className={cn("fleet-machine", checked && "fleet-machine-selected")}>
+    <div className="flex items-start gap-3">
+      <span className={cn("fleet-machine-icon", offline && "opacity-50")}><Monitor className="size-5" /></span>
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-base font-semibold tracking-tight" title={machine.hostname}>{machine.hostname}</h3>
+        <p className="mt-1 truncate text-xs text-muted-foreground">{machine.user || "No user signed in"}</p>
+      </div>
+      <span className={cn("fleet-selection", checked && "fleet-selection-on")} aria-hidden="true">{checked ? "✓" : ""}</span>
+    </div>
+    <div className="mt-5 flex items-center justify-between gap-2">
+      <span className={cn("fleet-status", `fleet-status-${machine.status}`)}><StatusLamp status={machine.status} />{STATUS_LABEL[machine.status]}</span>
+      <span className="text-[11px] text-muted-foreground">{machine.demo ? "Demo machine" : machine.lastSeenLabel}</span>
+    </div>
+    <div className="fleet-card-metrics" title={offline ? "Machine offline — live metrics unavailable" : "Live resource usage"}>
+      <Meter label="CPU" value={offline ? null : machine.cpu} />
+      <Meter label="RAM" value={offline ? null : machine.memory} warnAt={90} />
+      <Meter label="GPU" value={offline ? null : machine.gpu ?? null} />
+    </div>
+    <div className="mt-4 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+      <span className="truncate">{machine.os || "Windows"}</span>
+      <span className="shrink-0">{offline ? "Awaiting connection" : machine.mappedDrives.length ? `${machine.mappedDrives.length} mapped drives` : "Agent connected"}</span>
+    </div>
+  </button>;
 }
 
 function EmptyState({

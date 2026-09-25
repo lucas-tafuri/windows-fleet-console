@@ -59,9 +59,9 @@
 .dark {
   --ink: #050505;
   --panel: #121214;
-  --background: #050505;
+  --background: #101214;
   --foreground: #f4f1ea;
-  --card: #121214;
+  --card: #191c20;
   --card-foreground: #f4f1ea;
   --popover: #121214;
   --popover-foreground: #f4f1ea;
@@ -70,7 +70,7 @@
   --secondary: #1a1a1c;
   --secondary-foreground: #f4f1ea;
   --muted: #1a1a1c;
-  --muted-foreground: #9a9aa3;
+  --muted-foreground: #a0a7b1;
   --accent: #1f1c10;
   --accent-foreground: #f8d849;
   --destructive: #ef635d;
@@ -83,7 +83,7 @@
   --chart-4: #9bb8d9;
   --chart-5: #9a9aa3;
   --radius: 0.45rem;
-  --sidebar: #0a0a0a;
+  --sidebar: #131518;
   --sidebar-foreground: #f4f1ea;
   --sidebar-primary: #f8d849;
   --sidebar-primary-foreground: #0a0a0a;
@@ -91,7 +91,7 @@
   --sidebar-accent-foreground: #f8d849;
   --sidebar-border: rgb(255 255 255 / 0.08);
   --sidebar-ring: #f8d849;
-  --online: #78a1d1;
+  --online: #78cbb0;
   --load: #f8d849;
   --frozen: #ef635d;
   --offline: #6b6b70;
@@ -108,11 +108,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    background-image:
-      radial-gradient(900px 420px at 8% -8%, rgb(248 216 73 / 0.12), transparent 55%),
-      radial-gradient(700px 380px at 92% 0%, rgb(120 161 209 / 0.09), transparent 50%),
-      radial-gradient(800px 400px at 50% 118%, rgb(239 99 93 / 0.07), transparent 50%),
-      linear-gradient(180deg, #0a0a0a 0%, #050505 50%, #000000 100%);
+    background-image: radial-gradient(1000px 500px at 80% 0%, rgb(120 161 209 / 0.035), transparent 70%);
     background-attachment: fixed;
   }
   html {
@@ -138,4 +134,53 @@
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Fleet workspace: columns follow available content width, not screen width. */
+.fleet-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:24px; padding:32px 24px 24px; }
+.fleet-eyebrow { color:var(--muted-foreground); font-size:10px; font-weight:600; letter-spacing:.18em; }
+.fleet-connection { display:inline-flex; align-items:center; gap:7px; font-size:11px; }
+.fleet-add { display:inline-flex; align-items:center; gap:8px; border-radius:8px; background:var(--primary); color:var(--primary-foreground); padding:10px 14px; font-size:12px; font-weight:600; }
+.fleet-add:hover { filter:brightness(1.08); }
+.fleet-overview { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin:0 24px 26px; border:1px solid var(--border); border-radius:12px; background:var(--card); overflow:hidden; }
+.fleet-stat { padding:20px 24px; border-right:1px solid var(--border); }
+.fleet-stat:last-child { border-right:0; }
+.fleet-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; padding:0 24px 18px; }
+.fleet-filter { display:inline-flex; gap:8px; align-items:center; padding:8px 10px; border-radius:7px; font-size:12px; color:var(--muted-foreground); transition:background .15s,color .15s; }
+.fleet-filter span { font-size:10px; opacity:.8; }
+.fleet-filter:hover { background:rgb(255 255 255 / .04); color:var(--foreground); }
+.fleet-filter-active { background:rgb(248 216 73 / .10); color:var(--primary); }
+.fleet-search { display:flex; align-items:center; gap:9px; padding:9px 12px; border:1px solid var(--input); border-radius:8px; color:var(--muted-foreground); background:var(--sidebar); }
+.fleet-search:focus-within { border-color:var(--primary); }
+.fleet-search input { outline:none; font-size:12px; background:transparent; width:210px; min-width:0; color:var(--foreground); }
+.fleet-list-heading { display:flex; justify-content:space-between; align-items:center; margin:0 24px 12px; font-size:11px; color:var(--muted-foreground); }
+.fleet-machine-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr)); gap:16px; align-items:start; }
+.fleet-machine { width:100%; min-width:0; padding:20px; border:1px solid var(--border); border-radius:12px; background:var(--card); text-align:left; box-shadow:0 2px 5px rgb(0 0 0 / .08); transition:border-color .15s,background .15s,box-shadow .15s; cursor:pointer; }
+.fleet-machine:hover { border-color:rgb(255 255 255 / .22); background:#1e2227; box-shadow:0 5px 18px rgb(0 0 0 / .12); }
+.fleet-machine-selected, .fleet-machine-selected:hover { border-color:var(--primary); background:#23231e; }
+.fleet-machine-icon { display:grid; place-items:center; width:40px; height:40px; border:1px solid rgb(255 255 255 / .06); border-radius:10px; background:rgb(255 255 255 / .035); color:#a9b5c5; flex-shrink:0; }
+.fleet-selection { display:grid; place-items:center; width:17px; height:17px; border:1px solid rgb(255 255 255 / .20); border-radius:5px; color:var(--primary-foreground); font-size:12px; flex-shrink:0; }
+.fleet-selection-on { background:var(--primary); border-color:var(--primary); }
+.fleet-status { display:inline-flex; align-items:center; gap:6px; padding:4px 7px; border-radius:5px; font-size:10px; font-weight:500; background:rgb(255 255 255 / .04); }
+.fleet-status-online { color:var(--online); background:rgb(120 203 176 / .08); }
+.fleet-status-under_load { color:var(--load); background:rgb(248 216 73 / .08); }
+.fleet-status-frozen { color:var(--frozen); background:rgb(239 99 93 / .08); }
+.fleet-status-limited { color:var(--limited); }
+.fleet-status-offline { color:#adb0b8; }
+.fleet-card-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding:18px 0; margin-top:16px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.fleet-job-panel { background:var(--card); border:1px solid var(--border); border-radius:12px; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid var(--ring); outline-offset:4px; }
+@media (max-width:640px) {
+  .fleet-heading { padding:24px 16px; }
+  .fleet-overview { margin:0 16px 24px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .fleet-stat { padding:16px; }
+  .fleet-stat:nth-child(2) { border-right:0; }
+  .fleet-stat:nth-child(-n+2) { border-bottom:1px solid var(--border); }
+  .fleet-toolbar { padding:0 16px 16px; }
+  .fleet-search { width:100%; }
+  .fleet-search input { width:100%; }
+  .fleet-list-heading { margin:0 16px 12px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { animation:none !important; transition:none !important; }
 }
