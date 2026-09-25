@@ -32,7 +32,7 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps
 set "ERR=%ERRORLEVEL%"
 echo.
 echo Log file: %TEMP%\fleet-console-install.log
-echo Also:     %LOCALAPPDATA%\FleetConsole\install.log
+echo Also:     %ProgramData%\FleetConsole\install.log
 if not "%ERR%"=="0" (
   echo Install finished with error code %ERR%.
 )

@@ -25,6 +25,7 @@ type Heartbeat struct {
 	Hostname       string        `json:"hostname"`
 	User           string        `json:"user"`
 	OS             string        `json:"os"`
+	GPU            *float64      `json:"gpu"`
 	CPU            *float64      `json:"cpu"`
 	Memory         *float64      `json:"memory"`
 	Frozen         bool          `json:"frozen"`
@@ -87,6 +88,7 @@ func (c *Client) collect() Heartbeat {
 		User:           snap.User,
 		OS:             snap.OS,
 		CPU:            snap.CPU,
+		GPU:            snap.GPU,
 		Memory:         snap.Memory,
 		Frozen:         snap.Frozen,
 		MetricsLimited: snap.MetricsLimited,

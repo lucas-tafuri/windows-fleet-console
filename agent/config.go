@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -37,9 +38,14 @@ func loadConfig() Config {
 	cfg := Config{Repo: defaultRepo, Branch: defaultBranch}
 	raw, err := os.ReadFile(configPath())
 	if err != nil {
+		if !os.IsNotExist(err) {
+			panic(fmt.Errorf("read saved pairing: %w", err))
+		}
 		return cfg
 	}
-	_ = json.Unmarshal(raw, &cfg)
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		panic(fmt.Errorf("invalid saved pairing (left unchanged): %w", err))
+	}
 	if cfg.Repo == "" {
 		cfg.Repo = defaultRepo
 	}
@@ -49,8 +55,29 @@ func loadConfig() Config {
 	return cfg
 }
 
-func saveConfig(cfg Config) {
-	_ = os.MkdirAll(dataDir, 0o755)
-	raw, _ := json.MarshalIndent(cfg, "", "  ")
-	_ = os.WriteFile(configPath(), raw, 0o600)
+func saveConfig(cfg Config) error {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dataDir, "config-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(raw); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), configPath())
 }

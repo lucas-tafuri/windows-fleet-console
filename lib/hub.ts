@@ -99,7 +99,7 @@ export async function getEnrollInfo(hostHeader: string | null) {
     command: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1`,
     pollFallback: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -HttpOnly`,
     scheduledTask:
-      "install.ps1 / install.cmd copies the PrettyDamnFleet agent to %LOCALAPPDATA%\\FleetConsole and registers a logon task (Startup folder fallback).",
+      "Run install.ps1 / install.cmd as administrator once. Pairing is saved in %ProgramData%\\FleetConsole; the agent starts at Windows boot and reconnects automatically.",
     repo: "https://github.com/lucas-tafuri/windows-fleet-console.git",
     oneLiner: `powershell -NoExit -NoProfile -ExecutionPolicy Bypass -Command "Write-Host 'Log will be at' $env:TEMP\\fleet-console-install.log; iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile $env:TEMP\\fleet-install.ps1; & $env:TEMP\\fleet-install.ps1"`,
   };
@@ -135,6 +135,7 @@ function applyHeartbeat(machine: Machine | undefined, hb: Heartbeat, transport: 
     os: hb.os || machine?.os || "Windows",
     demo: false,
     lastSeen: Date.now(),
+    gpu: typeof hb.gpu === "number" && Number.isFinite(hb.gpu) ? Math.max(0, Math.min(100, hb.gpu)) : null,
     cpu: hb.cpu ?? machine?.cpu ?? null,
     memory: hb.memory ?? machine?.memory ?? null,
     frozenHint: Boolean(hb.frozen),

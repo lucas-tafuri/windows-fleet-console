@@ -20,6 +20,7 @@ type snapshot struct {
 	Hostname       string
 	User           string
 	OS             string
+	GPU            *float64
 	CPU            *float64
 	Memory         *float64
 	Frozen         bool
@@ -156,9 +157,13 @@ func hungForeground() (bool, error) {
 func collectSnapshot() snapshot {
 	host, _ := os.Hostname()
 	user := os.Getenv("USERNAME")
+	if background {
+		user = interactiveUser()
+	}
 	osName := productName()
 	s := snapshot{Hostname: host, User: user, OS: osName, MappedDrives: listDrives()}
 
+	s.GPU = currentGPU()
 	cpu, cpuErr := cpuPercent()
 	mem, memErr := memPercent()
 	if cpuErr == nil {

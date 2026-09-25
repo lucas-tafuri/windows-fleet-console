@@ -5,11 +5,12 @@ import type { MapPrefs, StoreData } from "./types";
 import { seedDemoMachines } from "./demo";
 import { DEFAULT_SOFTWARE } from "./catalog";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = process.env.FLEET_DATA_DIR || path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "fleet.json");
 const TMP = path.join(DATA_DIR, "fleet.json.tmp");
 
 let cache: StoreData | null = null;
+let loading: Promise<StoreData> | null = null;
 let chain: Promise<void> = Promise.resolve();
 
 function emptyMapPrefs(): MapPrefs {
@@ -100,10 +101,11 @@ async function loadFromDisk(): Promise<StoreData> {
         process.env.FLEET_TOKEN || randomBytes(24).toString("base64url");
       dirty = true;
     }
-    if (process.env.FLEET_TOKEN) parsed.fleetToken = process.env.FLEET_TOKEN;
     if (dirty) await persist(parsed);
     return parsed;
-  } catch {
+  } catch (error) {
+    // Never replace existing enrollment data after a read or parse failure.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     const store = emptyStore();
     seedDemoMachines(store);
     await persist(store);
@@ -119,7 +121,13 @@ async function persist(store: StoreData): Promise<void> {
 }
 
 export async function getStore(): Promise<StoreData> {
-  if (!cache) cache = await loadFromDisk();
+  if (!cache) {
+    loading ??= loadFromDisk().catch((error) => {
+      loading = null;
+      throw error;
+    });
+    cache = await loading;
+  }
   if (Object.keys(cache.machines).length === 0) {
     seedDemoMachines(cache);
   }
@@ -130,7 +138,7 @@ export async function updateStore(
   mutator: (store: StoreData) => void | boolean
 ): Promise<StoreData> {
   let result: StoreData | null = null;
-  chain = chain.then(async () => {
+  chain = chain.catch(() => {}).then(async () => {
     const store = await getStore();
     const persistNeeded = mutator(store);
     if (persistNeeded !== false) await persist(store);

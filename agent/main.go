@@ -10,12 +10,22 @@ import (
 	"time"
 )
 
+var background bool
+var installOnly bool
+
 func main() {
+	sessionJob := flag.String("session-job", "", "Run one job in the signed-in user's session")
+	flag.BoolVar(&background, "background", false, "Run without a tray for Windows boot startup")
+	flag.BoolVar(&installOnly, "install-only", false, "Save configuration and install without starting")
 	server := flag.String("server", "", "PrettyDamnFleet URL, e.g. http://192.168.1.10:43123")
 	token := flag.String("token", "", "Fleet token from the Enroll page")
 	httpOnly := flag.Bool("http-only", false, "Skip WebSocket and use HTTP poll only")
 	dataDirFlag := flag.String("data-dir", "", "Directory for machine-id and install (default: %LOCALAPPDATA%\\FleetConsole)")
 	flag.Parse()
+	if *sessionJob != "" {
+		runSessionJobFile(*sessionJob)
+		return
+	}
 
 	dir := *dataDirFlag
 	if dir == "" {
@@ -43,11 +53,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: fleet-agent.exe --server http://host:43123 --token <token>")
 		os.Exit(2)
 	}
-	saveConfig(agentCfg)
+	if err := saveConfig(agentCfg); err != nil {
+		fmt.Fprintf(os.Stderr, "save pairing: %v\n", err)
+		os.Exit(1)
+	}
 
 	relocated, err := ensureInstalled()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "startup install: %v\n", err)
+		if installOnly {
+			os.Exit(1)
+		}
 	}
 	if relocated {
 		fmt.Println("Installed to", filepath.Join(dataDir, "fleet-agent.exe"))
@@ -59,12 +75,18 @@ func main() {
 		fmt.Println("Switching to that copy.")
 		os.Exit(0)
 	}
+	if installOnly {
+		return
+	}
+	if !acquireInstance() {
+		return
+	}
 
 	idPath := filepath.Join(dataDir, "machine-id")
 	id, _ := os.ReadFile(idPath)
-	machineID := string(bytesTrim(id))
+	machineID := agentCfg.MachineID
 	if machineID == "" {
-		machineID = agentCfg.MachineID
+		machineID = string(bytesTrim(id))
 	}
 
 	client := &Client{
@@ -75,13 +97,19 @@ func main() {
 		OnID: func(id string) {
 			_ = os.WriteFile(idPath, []byte(id), 0o600)
 			agentCfg.MachineID = id
-			saveConfig(agentCfg)
+			if err := saveConfig(agentCfg); err != nil {
+				logf("save machine identity: %v", err)
+			}
 		},
 	}
 
 	fmt.Printf("PrettyDamnFleet agent → %s (ws=%v) install=%s\n", client.Server, !client.HTTPOnly, dataDir)
 
 	go runLoop(client)
+	if background {
+		waitSignal()
+		return
+	}
 	serveTray(client)
 }
 

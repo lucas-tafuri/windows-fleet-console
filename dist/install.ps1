@@ -1,6 +1,6 @@
 ﻿# PrettyDamnFleet - Windows client install (ASCII only; Windows PowerShell 5.1)
 # Logs: %TEMP%\fleet-console-install.log
-#       %LOCALAPPDATA%\FleetConsole\install.log
+#       %ProgramData%\FleetConsole\install.log
 #
 #   powershell -ExecutionPolicy Bypass -File install.ps1
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Server http://HOST:43123 -Token TOKEN
@@ -18,7 +18,8 @@ $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $logTemp = Join-Path $env:TEMP "fleet-console-install.log"
-$installRoot = Join-Path $env:LOCALAPPDATA "FleetConsole"
+$installRoot = Join-Path $env:ProgramData "FleetConsole"
+$legacyRoot = Join-Path $env:LOCALAPPDATA "FleetConsole"
 $logLocal = Join-Path $installRoot "install.log"
 $repoDir = Join-Path $installRoot "repo"
 $exeUrl = "https://github.com/lucas-tafuri/windows-fleet-console/raw/main/dist/fleet-agent.exe"
@@ -185,7 +186,24 @@ function Request-FleetApproval {
 }
 
 try {
+  $admin = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+  if (-not $admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "Run this installer as administrator to enable startup before Windows sign-in."
+  }
   New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+  # Preserve existing pairing when upgrading the old per-user installation.
+  foreach ($name in @("config.json", "machine-id")) {
+    $dest = Join-Path $installRoot $name
+    $old = Join-Path $legacyRoot $name
+    if (-not (Test-Path $dest) -and (Test-Path $old)) { Copy-Item -LiteralPath $old -Destination $dest }
+  }
+  $savedPath = Join-Path $installRoot "config.json"
+  if (Test-Path $savedPath) {
+    $saved = Get-Content -Raw -LiteralPath $savedPath | ConvertFrom-Json
+    if (-not $Server) { $Server = $saved.server }
+    if (-not $Token -and $Server.TrimEnd('/') -eq ([string]$saved.server).TrimEnd('/')) { $Token = $saved.token }
+    if ($saved.httpOnly) { $HttpOnly = $true }
+  }
   $stamp = Get-Date -Format o
   Set-Content -Path $logTemp -Encoding ASCII -Value ("=== PrettyDamnFleet install " + $stamp + " ===")
   try { Start-Transcript -Path $logTemp -Append -Force | Out-Null } catch {}
@@ -281,14 +299,50 @@ try {
     }
   }
 
-  $argList = @("--server", $Server, "--token", $Token, "--data-dir", $installRoot)
+  $existingTask = Get-ScheduledTask -TaskName 'Fleet Console Agent' -ErrorAction SilentlyContinue
+  if ($existingTask) { Stop-ScheduledTask -TaskName 'Fleet Console Agent'; Start-Sleep -Seconds 2 }
+  Get-CimInstance Win32_Process -Filter "Name='fleet-agent.exe'" | Where-Object {
+    $_.ExecutablePath -eq (Join-Path $installRoot 'fleet-agent.exe') -or
+    $_.ExecutablePath -eq (Join-Path $legacyRoot 'fleet-agent.exe')
+  } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  Set-Content -LiteralPath (Join-Path $installRoot 'boot-installed') -Value '1'
+  $argList = @("--install-only","--server", $Server, "--token", $Token, "--data-dir", $installRoot)
   if ($HttpOnly) { $argList += "--http-only" }
 
-  Write-Step "Starting the agent (copies itself to LocalAppData and registers at logon)"
-  Write-Host ("Command: " + $exe + " " + ($argList -join " "))
+  Write-Step "Starting the agent (preserves pairing and registers Windows boot startup)"
+  Write-Host "Saving the existing pairing and installing the agent."
   & $exe @argList
-  Write-Host ("Agent first-launch exit code: " + $LASTEXITCODE)
+  $agentExit = $LASTEXITCODE
+  Write-Host ("Agent install exit code: " + $agentExit)
 
+  if ($agentExit -ne 0) { throw "Agent installation failed." }
+  $installed = Join-Path $installRoot 'fleet-agent.exe'
+  # A persistent supervisor owns restart/update so a successful self-update exit
+  # cannot leave the scheduled task stopped until the next boot.
+  $runner = Join-Path $installRoot 'run-agent.ps1'
+  @'
+$ErrorActionPreference = 'Stop'
+$exe = Join-Path $PSScriptRoot 'fleet-agent.exe'
+while ($true) {
+  try {
+    if (Test-Path -LiteralPath ($exe + '.new')) {
+      Move-Item -LiteralPath ($exe + '.new') -Destination $exe -Force
+    }
+    Start-Process -FilePath $exe -ArgumentList ('--background --data-dir "' + $PSScriptRoot + '"') -WindowStyle Hidden -Wait
+  } catch {
+    Add-Content -LiteralPath (Join-Path $PSScriptRoot 'supervisor.log') -Value $_
+  }
+  Start-Sleep -Seconds 3
+}
+'@ | Set-Content -LiteralPath $runner -Encoding UTF8
+  $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $runner + '"')
+  $trigger = New-ScheduledTaskTrigger -AtStartup
+  $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+  $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
+  Register-ScheduledTask -TaskName 'Fleet Console Agent' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+  $oldStartup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\FleetConsole.cmd'
+  if (Test-Path $oldStartup) { Remove-Item -LiteralPath $oldStartup }
+  Start-ScheduledTask -TaskName 'Fleet Console Agent'
   Start-Sleep -Seconds 2
   $running = Get-Process -Name "fleet-agent" -ErrorAction SilentlyContinue
   $installed = Join-Path $installRoot "fleet-agent.exe"
@@ -310,13 +364,13 @@ try {
       Write-Host ("  " + $installed)
     }
   } else {
-    Write-Host "The agent exe was not found in LocalAppData." -ForegroundColor Yellow
+    throw "The agent exe was not found in ProgramData."
   }
   Write-Host ("  install folder : " + $installRoot)
   if (Test-Path $installed) { Write-Host ("  installed exe  : " + $installed) }
   Write-Host ("  server         : " + $Server)
   if ($taskOk) {
-    Write-Host "  logon task     : Fleet Console Agent"
+    Write-Host "  boot task      : Fleet Console Agent"
   } elseif (Test-Path $startupCmd) {
     Write-Host ("  logon startup  : " + $startupCmd)
   } elseif (Test-Path $runnerCmd) {
@@ -324,7 +378,7 @@ try {
   } else {
     Write-Host "  logon          : not confirmed (you can still start the exe by hand)"
   }
-  Write-Host "It should start again the next time this user signs in."
+  Write-Host "It will start at Windows boot, before sign-in, and reconnect automatically."
 }
 catch {
   $exitCode = 1

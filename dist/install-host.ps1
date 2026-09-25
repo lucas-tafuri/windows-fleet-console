@@ -26,6 +26,10 @@ function Write-Step([string]$Message) {
 }
 
 try {
+  $admin = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+  if (-not $admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "Run this installer as administrator to enable startup before Windows sign-in."
+  }
   Write-Host "PrettyDamnFleet host installer" -ForegroundColor Cyan
   Write-Host ("Root: " + $root)
 
@@ -40,10 +44,12 @@ try {
   }
   Write-Host ("Node " + (node -v))
 
+  # Stop our task before replacing binaries or dependencies during upgrades.
+  $task = Get-ScheduledTask -TaskName 'Fleet Console Host' -ErrorAction SilentlyContinue
+  if ($task) { Stop-ScheduledTask -TaskName 'Fleet Console Host'; Start-Sleep -Seconds 2 }
   Write-Step "npm install"
   Push-Location $root
-  npm install
-  Pop-Location
+  try { npm install; if ($LASTEXITCODE -ne 0) { throw "npm install failed" } } finally { Pop-Location }
 
   $exe = Join-Path $root "dist\fleet-console.exe"
   if (Get-Command go -ErrorAction SilentlyContinue) {
@@ -72,8 +78,28 @@ try {
     }
     Start-Sleep -Seconds 1
   }
-  Start-Process -FilePath $exe
-  Write-Host "Started. Look for the PrettyDamnFleet icon in the notification area."
+  New-Item -ItemType Directory -Force -Path (Join-Path $root 'data') | Out-Null
+  Set-Content -LiteralPath (Join-Path $root 'data\boot-installed') -Value '1'
+  # Run a stable installed copy so git can replace dist binaries during updates.
+  $runtimeDir = Join-Path $env:ProgramData 'FleetConsoleHost'
+  New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+  $runtimeExe = Join-Path $runtimeDir 'fleet-console.exe'
+  Copy-Item -LiteralPath $exe -Destination $runtimeExe -Force
+  $action = New-ScheduledTaskAction -Execute $runtimeExe -Argument ('--background --root "' + $root + '"') -WorkingDirectory $root
+  $trigger = New-ScheduledTaskTrigger -AtStartup
+  $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+  $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
+  Register-ScheduledTask -TaskName 'Fleet Console Host' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+  $oldStartup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\FleetConsoleHost.cmd'
+  if (Test-Path $oldStartup) { Remove-Item -LiteralPath $oldStartup }
+  if (-not (Get-NetFirewallRule -DisplayName 'PrettyDamnFleet HTTP' -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName 'PrettyDamnFleet HTTP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 43123 -Profile Private,Domain | Out-Null
+  }
+  if (-not (Get-NetFirewallRule -DisplayName 'PrettyDamnFleet Discovery' -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName 'PrettyDamnFleet Discovery' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 43124 -Profile Private,Domain | Out-Null
+  }
+  Start-ScheduledTask -TaskName 'Fleet Console Host'
+  Write-Host "Started in the background. It will start automatically before Windows sign-in."
   Write-Host "Dashboard: http://127.0.0.1:43123"
   Write-Host "SUCCESS" -ForegroundColor Green
 } catch {

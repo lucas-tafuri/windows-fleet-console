@@ -19,6 +19,7 @@ export type Machine = {
   os: string;
   demo: boolean;
   lastSeen: number;
+  gpu: number | null;
   cpu: number | null;
   memory: number | null;
   frozenHint: boolean;
@@ -86,6 +87,7 @@ export type Heartbeat = {
   hostname: string;
   user?: string;
   os?: string;
+  gpu?: number | null;
   cpu?: number | null;
   memory?: number | null;
   frozen?: boolean;

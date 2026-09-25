@@ -11,6 +11,7 @@ type snapshot struct {
 	Hostname       string
 	User           string
 	OS             string
+	GPU            *float64
 	CPU            *float64
 	Memory         *float64
 	Frozen         bool

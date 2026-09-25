@@ -138,7 +138,7 @@ export function FleetView() {
             </EmptyState>
           ) : (
             <>
-              <div className="hidden overflow-hidden rounded-xl border border-white/8 bg-card/80 md:block">
+              <div className="hidden overflow-x-auto rounded-xl border border-white/8 bg-card/80 md:block">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-white/8 text-[11px] tracking-wide text-muted-foreground uppercase">
                     <tr>
@@ -154,6 +154,7 @@ export function FleetView() {
                       <th className="px-2 py-2.5 font-medium">Status</th>
                       <th className="px-2 py-2.5 font-medium">CPU</th>
                       <th className="px-2 py-2.5 font-medium">Memory</th>
+                      <th className="px-2 py-2.5 font-medium">GPU</th>
                       <th className="px-2 py-2.5 font-medium">Seen</th>
                     </tr>
                   </thead>
@@ -193,9 +194,10 @@ export function FleetView() {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {m.user || "no interactive user"} · {m.lastSeenLabel}
                     </p>
-                    <div className="mt-3 flex gap-4">
+                    <div className="mt-3 flex flex-wrap gap-4">
                       <Meter label="CPU" value={m.cpu} />
                       <Meter label="RAM" value={m.memory} />
+                      <Meter label="GPU" value={m.gpu ?? null} />
                     </div>
                   </button>
                 ))}
@@ -353,6 +355,9 @@ function MachineRow({
       </td>
       <td className="px-2 py-3">
         <Meter label="RAM" value={machine.memory} />
+      </td>
+      <td className="px-2 py-3">
+        <Meter label="GPU" value={machine.gpu ?? null} />
       </td>
       <td className="tabular px-2 py-3 font-mono text-[11px] text-muted-foreground">
         {machine.lastSeenLabel}

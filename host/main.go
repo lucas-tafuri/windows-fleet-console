@@ -3,6 +3,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -34,17 +35,45 @@ var (
 )
 
 func main() {
-	rootDir = findRoot()
+	background := flag.Bool("background", false, "Run without a tray at Windows boot")
+	root := flag.String("root", "", "Application directory")
+	flag.Parse()
+	name, _ := windows.UTF16PtrFromString(`Global\PrettyDamnFleetHost`)
+	handle, lockErr := windows.CreateMutex(nil, false, name)
+	if lockErr != nil {
+		if handle != 0 {
+			windows.CloseHandle(handle)
+		}
+		if !*background {
+			openDashboard()
+		}
+		return
+	}
+	defer windows.CloseHandle(handle)
+	rootDir = *root
+	if rootDir == "" {
+		rootDir = findRoot()
+	}
 	_ = os.MkdirAll(filepath.Join(rootDir, "data"), 0o755)
 	setupLog()
 	logf("PrettyDamnFleet host root=%s", rootDir)
 
-	if err := registerLogon(); err != nil {
+	if err := registerLogon(); !*background && err != nil {
 		logf("logon registration: %v", err)
 	}
 
 	if err := startNode(); err != nil {
 		logf("start dashboard: %v", err)
+	}
+
+	if *background {
+		// Keep the dashboard available after transient startup errors or crashes.
+		for {
+			time.Sleep(5 * time.Second)
+			if err := startNode(); err != nil {
+				logf("dashboard retry: %v", err)
+			}
+		}
 	}
 
 	err := wintray.Run(wintray.Config{
@@ -232,6 +261,9 @@ func openDashboard() {
 }
 
 func registerLogon() error {
+	if _, err := os.Stat(filepath.Join(rootDir, "data", "boot-installed")); err == nil {
+		return nil
+	}
 	self, err := os.Executable()
 	if err != nil {
 		return err

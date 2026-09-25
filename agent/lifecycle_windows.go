@@ -31,6 +31,9 @@ func ensureInstalled() (relocated bool, err error) {
 			return false, fmt.Errorf("copy to %s: %w (running from current path); startup: %v", dest, copyErr, regErr)
 		}
 		regErr := registerLogon(dest)
+		if installOnly {
+			return true, regErr
+		}
 		if startErr := startDetached(dest); startErr != nil {
 			exePath = dest
 			return false, startErr
@@ -42,6 +45,10 @@ func ensureInstalled() (relocated bool, err error) {
 }
 
 func registerLogon(exe string) error {
+	// Boot installation owns startup; do not recreate per-user logon entries.
+	if _, err := os.Stat(filepath.Join(dataDir, "boot-installed")); err == nil {
+		return nil
+	}
 	runner, runErr := writeRunnerCmd(exe)
 	startupErr := writeStartupCmd(exe)
 
@@ -82,8 +89,7 @@ func writeStartupCmd(exe string) error {
 }
 
 func launcherCmd(exe string) string {
-	return fmt.Sprintf("@echo off\r\nstart \"\" \"%s\" --server %s --token %s --data-dir \"%s\"%s\r\n",
-		exe, agentCfg.Server, agentCfg.Token, dataDir, httpOnlyFlag())
+	return fmt.Sprintf("@echo off\r\nstart \"\" \"%s\" --data-dir \"%s\"\r\n", exe, dataDir)
 }
 
 func httpOnlyFlag() string {
@@ -95,6 +101,9 @@ func httpOnlyFlag() string {
 
 func startDetached(exe string) error {
 	args := []string{"--server", agentCfg.Server, "--token", agentCfg.Token, "--data-dir", dataDir}
+	if background {
+		args = append(args, "--background")
+	}
 	if agentCfg.HTTPOnly {
 		args = append(args, "--http-only")
 	}
@@ -220,13 +229,21 @@ func selfUpdate(jobID, repo, branch string) JobResult {
 }
 
 func spawnRestart(c *Client) {
+	// The boot task owns this process and applies staged updates after it exits.
+	if background {
+		return
+	}
 	dest := filepath.Join(dataDir, "fleet-agent.exe")
 	if exePath != "" {
 		dest = exePath
 	}
 	helper := filepath.Join(dataDir, "restart-agent.cmd")
-	body := fmt.Sprintf("timeout /t 2 /nobreak >nul\r\nif exist \"%s.new\" move /y \"%s.new\" \"%s\" >nul\r\nstart \"\" \"%s\" --server %s --token %s --data-dir \"%s\"%s\r\n",
-		dest, dest, dest, dest, c.Server, c.Token, dataDir, httpOnlyFlag())
+	mode := ""
+	if background {
+		mode = " --background"
+	}
+	body := fmt.Sprintf("timeout /t 2 /nobreak >nul\r\nif exist \"%s.new\" move /y \"%s.new\" \"%s\" >nul\r\nstart \"\" \"%s\" --data-dir \"%s\"%s\r\n",
+		dest, dest, dest, dest, dataDir, mode)
 	_ = os.WriteFile(helper, []byte("@echo off\r\n"+body), 0o644)
 	cmd := exec.Command("cmd", "/c", helper)
 	cmd.SysProcAttr = &windows.SysProcAttr{
