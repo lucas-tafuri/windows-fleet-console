@@ -44,13 +44,27 @@ func ensureInstalled() (relocated bool, err error) {
 	return false, registerLogon(dest)
 }
 
+func bootInstallDir() string {
+	base := os.Getenv("ProgramData")
+	if base == "" {
+		return ""
+	}
+	dir := filepath.Join(base, "FleetConsole")
+	if _, err := os.Stat(filepath.Join(dir, "boot-installed")); err == nil {
+		return dir
+	}
+	return ""
+}
+
 func registerLogon(exe string) error {
 	// Boot installation owns startup; do not recreate per-user logon entries.
+	if bootInstallDir() != "" {
+		return nil
+	}
 	if _, err := os.Stat(filepath.Join(dataDir, "boot-installed")); err == nil {
 		return nil
 	}
 	runner, runErr := writeRunnerCmd(exe)
-	startupErr := writeStartupCmd(exe)
 
 	var taskErr error
 	if runErr == nil {
@@ -64,8 +78,15 @@ func registerLogon(exe string) error {
 		taskErr = runErr
 	}
 
-	if taskErr != nil && startupErr != nil {
-		return fmt.Errorf("%v; startup folder: %w", taskErr, startupErr)
+	if taskErr != nil {
+		if startupErr := writeStartupCmd(exe); startupErr != nil {
+			return fmt.Errorf("%v; startup folder: %w", taskErr, startupErr)
+		}
+		return nil
+	}
+	// The Startup folder is only a fallback, not a second startup trigger.
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		_ = os.Remove(filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup\FleetConsole.cmd`))
 	}
 	return nil
 }
@@ -100,7 +121,7 @@ func httpOnlyFlag() string {
 }
 
 func startDetached(exe string) error {
-	args := []string{"--server", agentCfg.Server, "--token", agentCfg.Token, "--data-dir", dataDir}
+	args := []string{"--wait-for-instance", "--data-dir", dataDir}
 	if background {
 		args = append(args, "--background")
 	}

@@ -15,6 +15,7 @@ var installOnly bool
 
 func main() {
 	sessionJob := flag.String("session-job", "", "Run one job in the signed-in user's session")
+	waitForInstance := flag.Bool("wait-for-instance", false, "Wait for the installing parent to exit")
 	flag.BoolVar(&background, "background", false, "Run without a tray for Windows boot startup")
 	flag.BoolVar(&installOnly, "install-only", false, "Save configuration and install without starting")
 	server := flag.String("server", "", "PrettyDamnFleet URL, e.g. http://192.168.1.10:43123")
@@ -26,8 +27,20 @@ func main() {
 		runSessionJobFile(*sessionJob)
 		return
 	}
+	// Reject duplicate launches before touching pairing, files, or startup tasks.
+	if !installOnly {
+		release, err := acquireInstance(*waitForInstance)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+		defer release()
+	}
 
 	dir := *dataDirFlag
+	if dir == "" {
+		dir = bootInstallDir()
+	}
 	if dir == "" {
 		base, err := os.UserCacheDir()
 		if err != nil {
@@ -76,9 +89,6 @@ func main() {
 		os.Exit(0)
 	}
 	if installOnly {
-		return
-	}
-	if !acquireInstance() {
 		return
 	}
 

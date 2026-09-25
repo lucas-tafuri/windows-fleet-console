@@ -70,6 +70,12 @@ func main() {
 		// Keep the dashboard available after transient startup errors or crashes.
 		for {
 			time.Sleep(5 * time.Second)
+			mu.Lock()
+			busy := updating
+			mu.Unlock()
+			if busy {
+				continue
+			}
 			if err := startNode(); err != nil {
 				logf("dashboard retry: %v", err)
 			}
@@ -167,6 +173,9 @@ func startNode() error {
 	}
 	cmd := exec.Command(nodePath(), "server.mjs")
 	cmd.Dir = rootDir
+	if _, err := os.Stat(filepath.Join(rootDir, ".next", "BUILD_ID")); err == nil {
+		cmd.Env = append(os.Environ(), "NODE_ENV=production")
+	}
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.SysProcAttr = &windows.SysProcAttr{
@@ -232,7 +241,11 @@ func runUpdate() {
 	logf("%s", strings.TrimSpace(out))
 	if err != nil {
 		logf("git pull: %v", err)
+		return
 	}
+	// A production dashboard otherwise keeps serving the old UI from .next.
+	stopNode()
+	defer restartNode()
 	logf("update: npm install")
 	out, err = runInRoot("npm", "install")
 	logf("%s", strings.TrimSpace(out))
@@ -240,11 +253,22 @@ func runUpdate() {
 		logf("npm install: %v", err)
 		return
 	}
-	restartNode()
+	logf("update: rebuilding dashboard")
+	out, err = runInRoot("npm", "run", "build")
+	logf("%s", strings.TrimSpace(out))
+	if err != nil {
+		logf("dashboard build failed: %v", err)
+		return
+	}
 	logf("update complete")
 }
 
 func runInRoot(name string, args ...string) (string, error) {
+	if name == "npm" {
+		// npm is a Windows command script, not a native executable.
+		args = append([]string{"/d", "/s", "/c", "npm.cmd"}, args...)
+		name = "cmd.exe"
+	}
 	cmd := exec.Command(name, args...)
 	cmd.Dir = rootDir
 	cmd.SysProcAttr = &windows.SysProcAttr{HideWindow: true}

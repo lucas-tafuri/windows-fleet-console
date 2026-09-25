@@ -138,7 +138,7 @@ export function FleetView() {
             </EmptyState>
           ) : (
             <>
-              <div className="hidden overflow-x-auto rounded-xl border border-white/8 bg-card/80 md:block">
+              <div className="hidden overflow-x-auto rounded-xl border border-white/8 bg-card/80 xl:block">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-white/8 text-[11px] tracking-wide text-muted-foreground uppercase">
                     <tr>
@@ -171,7 +171,7 @@ export function FleetView() {
                 </table>
               </div>
 
-              <div className="grid gap-2 md:hidden">
+              <div className="grid gap-2 xl:hidden">
                 {filtered.map((m) => (
                   <button
                     key={m.id}
@@ -208,7 +208,7 @@ export function FleetView() {
 
         <div
           className={cn(
-            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-sidebar/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6 lg:right-80",
+            "fixed right-0 bottom-16 left-0 z-20 border-t border-white/8 bg-sidebar/95 px-3 py-2 backdrop-blur-md transition-[opacity,transform] duration-200 ease-out md:bottom-0 md:left-52 md:px-6 2xl:right-80",
             selected.length === 0
               ? "pointer-events-none translate-y-4 opacity-0"
               : "opacity-100"
@@ -237,7 +237,7 @@ export function FleetView() {
         </div>
       </div>
 
-      <aside className="hidden w-80 shrink-0 border-l border-white/8 bg-card/40 lg:flex lg:flex-col">
+      <aside className="hidden w-80 shrink-0 border-l border-white/8 bg-card/40 2xl:flex 2xl:flex-col">
         <div className="border-b border-white/8 px-4 py-4">
           <p className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
             Live rail

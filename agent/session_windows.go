@@ -122,6 +122,13 @@ func dispatchInteractiveJob(job AssignedJob) (JobResult, error) {
 	if err != nil {
 		return result, err
 	}
+	// This is a short-lived job worker, not another resident agent. Give it a
+	// distinct process name so Task Manager reflects that distinction.
+	worker := filepath.Join(dir, "fleet-session-worker.exe")
+	if err = copyFile(exe, worker); err != nil {
+		return result, err
+	}
+	exe = worker
 	app, _ := windows.UTF16PtrFromString(exe)
 	command, _ := windows.UTF16PtrFromString(windows.ComposeCommandLine([]string{exe, "--session-job", input}))
 	desktop, _ := windows.UTF16PtrFromString(`winsta0\default`)

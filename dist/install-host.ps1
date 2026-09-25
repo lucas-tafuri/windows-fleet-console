@@ -78,6 +78,12 @@ try {
     }
     Start-Sleep -Seconds 1
   }
+  Write-Step "Building the current dashboard UI"
+  Push-Location $root
+  try {
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw "Dashboard build failed; the updated UI was not installed." }
+  } finally { Pop-Location }
   New-Item -ItemType Directory -Force -Path (Join-Path $root 'data') | Out-Null
   Set-Content -LiteralPath (Join-Path $root 'data\boot-installed') -Value '1'
   # Run a stable installed copy so git can replace dist binaries during updates.

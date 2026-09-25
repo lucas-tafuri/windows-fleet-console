@@ -2,6 +2,8 @@
 
 package main
 
+func bootInstallDir() string { return "" }
+
 func ensureInstalled() (bool, error) { return false, nil }
 
 func selfUpdate(jobID, repo, branch string) JobResult {

@@ -301,9 +301,21 @@ try {
 
   $existingTask = Get-ScheduledTask -TaskName 'Fleet Console Agent' -ErrorAction SilentlyContinue
   if ($existingTask) { Stop-ScheduledTask -TaskName 'Fleet Console Agent'; Start-Sleep -Seconds 2 }
+  # Older installs can remain in another user's profile after migration to boot
+  # startup. Remove only Fleet's known launcher and stop only its installed exe.
+  $legacyRoots = @($legacyRoot)
+  $profiles = Get-CimInstance Win32_UserProfile | Where-Object { -not $_.Special -and $_.LocalPath }
+  foreach ($profile in $profiles) {
+    $legacyRoots += Join-Path $profile.LocalPath 'AppData\Local\FleetConsole'
+    $launcher = Join-Path $profile.LocalPath 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\FleetConsole.cmd'
+    if ((Test-Path -LiteralPath $launcher) -and ((Get-Content -Raw -LiteralPath $launcher) -match 'fleet-agent\.exe')) {
+      Remove-Item -LiteralPath $launcher
+    }
+  }
+  $legacyExecutables = @($legacyRoots | ForEach-Object { Join-Path $_ 'fleet-agent.exe' })
   Get-CimInstance Win32_Process -Filter "Name='fleet-agent.exe'" | Where-Object {
-    $_.ExecutablePath -eq (Join-Path $installRoot 'fleet-agent.exe') -or
-    $_.ExecutablePath -eq (Join-Path $legacyRoot 'fleet-agent.exe')
+    ($_.ExecutablePath -eq (Join-Path $installRoot 'fleet-agent.exe') -or
+    $_.ExecutablePath -in $legacyExecutables) -and $_.CommandLine -notmatch '--session-job\b'
   } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
   Set-Content -LiteralPath (Join-Path $installRoot 'boot-installed') -Value '1'
   $argList = @("--install-only","--server", $Server, "--token", $Token, "--data-dir", $installRoot)
@@ -344,7 +356,8 @@ while ($true) {
   if (Test-Path $oldStartup) { Remove-Item -LiteralPath $oldStartup }
   Start-ScheduledTask -TaskName 'Fleet Console Agent'
   Start-Sleep -Seconds 2
-  $running = Get-Process -Name "fleet-agent" -ErrorAction SilentlyContinue
+  $running = @(Get-CimInstance Win32_Process -Filter "Name='fleet-agent.exe'" | Where-Object { $_.CommandLine -notmatch '--session-job\b' })
+  if ($running.Count -gt 1) { throw "Multiple resident agents are still running. Close older manually launched copies and rerun this installer." }
   $installed = Join-Path $installRoot "fleet-agent.exe"
   $startupCmd = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup\FleetConsole.cmd"
   $runnerCmd = Join-Path $installRoot "run-agent.cmd"

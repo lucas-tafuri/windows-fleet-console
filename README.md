@@ -59,6 +59,12 @@ Boot tasks run as Local System so they can start before sign-in. Once someone si
 
 Background startup does not display a tray icon; open the dashboard in a browser. Protect the host installation directory from modification by untrusted users because its startup task runs with system privileges. Rerun the host installer after updating the checkout to refresh its installed launcher; it retains fleet data.
 
+### Updating existing installations
+
+Rerun `dist\install.ps1` as administrator on clients to remove legacy Startup-folder launchers across user profiles and consolidate startup into the boot task. The resident agent takes a machine-wide lock before setup or pairing changes. A second launch exits; a relocated copy waits for its installing parent to finish. Temporary desktop jobs appear as `fleet-session-worker.exe`, separately from the single resident `fleet-agent.exe`.
+
+Update the checkout on the console machine and rerun `dist\install-host.ps1` as administrator to install the current dashboard. The host installer and host Update action rebuild the production UI before restarting. Updating only the clients does not update the console's pages. Refresh the browser after updating the host.
+
 ### GPU usage
 
 Fleet rows and mobile cards include a GPU meter. It reports the busiest GPU engine across adapters, summing processes sharing that engine and clamping to 0–100%. Unsupported drivers, missing counters, and failed samples display **—**, not a fabricated zero. Sampling runs independently of heartbeats.

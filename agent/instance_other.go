@@ -2,4 +2,4 @@
 
 package main
 
-func acquireInstance() bool { return true }
+func acquireInstance(_ bool) (func(), error) { return func() {}, nil }
