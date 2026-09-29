@@ -19,7 +19,7 @@ func runJob(job AssignedJob) JobResult {
 
 	switch job.Kind {
 	case "check":
-		return checkPackage(job.ID, pkg)
+		return checkPackage(job.ID, pkg, payloadString(job.Payload, "match"))
 	case "install":
 		return installPackage(job.ID, pkg)
 	case "uninstall":

@@ -42,11 +42,18 @@ type AssignedJob struct {
 }
 
 type JobResult struct {
-	JobID   string `json:"jobId"`
-	Status  string `json:"status"`
-	Via     string `json:"via,omitempty"`
-	Message string `json:"message"`
-	Output  string `json:"output,omitempty"`
+	JobID         string                 `json:"jobId"`
+	Status        string                 `json:"status"`
+	Via           string                 `json:"via,omitempty"`
+	Message       string                 `json:"message"`
+	Output        string                 `json:"output,omitempty"`
+	Installed     *bool                  `json:"installed,omitempty"`
+	Installations []SoftwareInstallation `json:"installations,omitempty"`
+}
+
+type SoftwareInstallation struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
 }
 
 type PollResponse struct {

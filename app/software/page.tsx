@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { JobResults } from "@/components/job-results";
 import { useFleet } from "@/hooks/use-fleet";
 import { softwareNeedle } from "@/lib/catalog";
-import type { Job } from "@/lib/types";
+import type { Job, SoftwareInstallation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function SoftwarePage() {
@@ -89,8 +89,8 @@ export default function SoftwarePage() {
       </p>
       <h2 className="mt-1 text-2xl font-medium tracking-tight">Software</h2>
       <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-        Titles you care about across the fleet. Check uses the uninstall
-        registry (and winget when the id is known).
+        Installed versions of the titles you care about, for each client.
+        Select clients and check the catalog to refresh their versions.
       </p>
 
       <form
@@ -190,6 +190,19 @@ export default function SoftwarePage() {
                     return (
                       <td key={item.id} className="px-2 py-2.5">
                         <StatusPill installed={cell?.installed} known={Boolean(cell)} />
+                        {cell?.installed ? (
+                          <ul className="mt-1.5 space-y-1 text-xs">
+                            {cell.installations?.length ? cell.installations.map((entry, index) => (
+                              <li key={`${entry.name}-${entry.version}-${index}`}>
+                                <span className="block text-muted-foreground">{entry.name}</span>
+                                <span className="font-mono">{installationVersion(entry)}</span>
+                              </li>
+                            )) : <li className="text-muted-foreground">Version unavailable — check again after updating the agent</li>}
+                          </ul>
+                        ) : null}
+                        {cell ? <p className="mt-1 text-[10px] text-muted-foreground" title={cell.detail}>
+                          Checked {new Date(cell.lastChecked).toLocaleString()}
+                        </p> : null}
                       </td>
                     );
                   })}
@@ -235,6 +248,10 @@ export default function SoftwarePage() {
       ) : null}
     </div>
   );
+}
+
+function installationVersion(entry: SoftwareInstallation) {
+  return entry.version || "Version unavailable";
 }
 
 function StatusPill({

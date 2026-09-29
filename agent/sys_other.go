@@ -30,7 +30,7 @@ func collectSnapshot() snapshot {
 	}
 }
 
-func checkPackage(jobID, pkg string) JobResult {
+func checkPackage(jobID, pkg string, matches ...string) JobResult {
 	return unsupported(jobID, "check "+pkg)
 }
 func installPackage(jobID, pkg string) JobResult {

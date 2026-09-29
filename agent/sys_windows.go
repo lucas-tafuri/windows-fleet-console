@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -227,31 +228,37 @@ func wingetOK() bool {
 	return err == nil
 }
 
-func checkPackage(jobID, pkg string) JobResult {
+func checkPackage(jobID, pkg string, matches ...string) JobResult {
+	pkg = strings.TrimSpace(pkg)
 	if pkg == "" {
 		return JobResult{JobID: jobID, Status: "error", Message: "package id or name is required"}
 	}
+	match := pkg
+	if len(matches) > 0 && strings.TrimSpace(matches[0]) != "" {
+		match = strings.TrimSpace(matches[0])
+	}
+	entries, registryErr := registryInstallations(pkg, match)
+	if len(entries) > 0 {
+		return softwareCheckResult(jobID, pkg, "registry", entries)
+	}
 	if wingetOK() {
 		out, err := runCmd("winget", "list", "--id", pkg, "--exact", "--disable-interactivity")
-		if err == nil && wingetFound(out, pkg) {
-			return JobResult{JobID: jobID, Status: "ok", Via: "winget", Message: pkg + " is installed", Output: clip(out)}
+		if found := parseWingetInstallations(out, pkg, true); err == nil && len(found) > 0 {
+			return softwareCheckResult(jobID, pkg, "winget", found)
 		}
-		out2, err2 := runCmd("winget", "list", "--name", pkg, "--disable-interactivity")
-		if err2 == nil && wingetFound(out2, pkg) {
-			return JobResult{JobID: jobID, Status: "ok", Via: "winget", Message: pkg + " is installed", Output: clip(out2)}
+		out2, err2 := runCmd("winget", "list", "--name", match, "--disable-interactivity")
+		if found := parseWingetInstallations(out2, match, false); err2 == nil && len(found) > 0 {
+			return softwareCheckResult(jobID, pkg, "winget", found)
 		}
-		if found, via, detail := registryHas(pkg); found {
-			return JobResult{JobID: jobID, Status: "ok", Via: via, Message: pkg + " is installed", Output: detail}
-		}
-		return JobResult{JobID: jobID, Status: "ok", Via: "winget", Message: pkg + " is not installed", Output: clip(out + "\n" + out2)}
 	}
-	if found, via, detail := registryHas(pkg); found {
-		return JobResult{JobID: jobID, Status: "ok", Via: via, Message: pkg + " is installed", Output: detail}
+	entries, err := getPackageInstallations(match)
+	if len(entries) > 0 {
+		return softwareCheckResult(jobID, pkg, "Get-Package", entries)
 	}
-	if found, detail := getPackage(pkg); found {
-		return JobResult{JobID: jobID, Status: "ok", Via: "Get-Package", Message: pkg + " is installed", Output: detail}
+	if registryErr != nil || err != nil {
+		return JobResult{JobID: jobID, Status: "error", Message: "Could not complete software inventory for " + pkg, Output: fmt.Sprintf("Registry: %v; Get-Package: %v", registryErr, err)}
 	}
-	return JobResult{JobID: jobID, Status: "ok", Via: "registry", Message: pkg + " is not installed", Output: "No uninstall registry entry or Get-Package match."}
+	return softwareCheckResult(jobID, pkg, "registry", nil)
 }
 
 func installPackage(jobID, pkg string) JobResult {
@@ -295,16 +302,17 @@ func uninstallPackage(jobID, pkg string) JobResult {
 	return JobResult{JobID: jobID, Status: "error", Via: "winget", Message: "Uninstall failed for " + pkg, Output: clip(out + "\n" + out2)}
 }
 
-func wingetFound(out, pkg string) bool {
-	low := strings.ToLower(out)
-	if strings.Contains(low, "no installed package") || strings.Contains(low, "no package found") {
-		return false
+func registryHas(pkg string) (bool, string, string) {
+	entries, _ := registryInstallations(pkg, pkg)
+	if len(entries) > 0 {
+		return true, "registry", entries[0].Name
 	}
-	return strings.Contains(low, strings.ToLower(pkg))
+	return false, "registry", ""
 }
 
-func registryHas(pkg string) (bool, string, string) {
-	needle := strings.ToLower(pkg)
+func registryInstallations(pkg, match string) ([]SoftwareInstallation, error) {
+	var entries []SoftwareInstallation
+	var scanErr error
 	roots := []struct {
 		root registry.Key
 		path string
@@ -312,40 +320,58 @@ func registryHas(pkg string) (bool, string, string) {
 		{registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`},
 		{registry.LOCAL_MACHINE, `SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`},
 		{registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`},
+		{registry.CURRENT_USER, `SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`},
 	}
 	for _, r := range roots {
 		k, err := registry.OpenKey(r.root, r.path, registry.ENUMERATE_SUB_KEYS)
 		if err != nil {
+			if !errors.Is(err, syscall.ERROR_FILE_NOT_FOUND) {
+				scanErr = err
+			}
 			continue
 		}
-		names, _ := k.ReadSubKeyNames(0)
+		names, err := k.ReadSubKeyNames(0)
+		if err != nil {
+			scanErr = err
+		}
 		for _, name := range names {
 			sk, err := registry.OpenKey(k, name, registry.QUERY_VALUE)
 			if err != nil {
+				scanErr = err
 				continue
 			}
 			dn, _, _ := sk.GetStringValue("DisplayName")
+			version, _, _ := sk.GetStringValue("DisplayVersion")
 			sk.Close()
 			if dn == "" {
 				continue
 			}
-			if strings.Contains(strings.ToLower(dn), needle) || strings.EqualFold(name, pkg) {
-				k.Close()
-				return true, "registry", dn
+			if softwareNameMatches(dn, match) || strings.EqualFold(name, pkg) {
+				entries = append(entries, SoftwareInstallation{Name: dn, Version: version})
 			}
 		}
 		k.Close()
 	}
-	return false, "registry", ""
+	return uniqueInstallations(entries), scanErr
 }
 
-func getPackage(pkg string) (bool, string) {
+func getPackageInstallations(match string) ([]SoftwareInstallation, error) {
 	out, err := runCmd("powershell", "-NoProfile", "-Command",
-		"Get-Package -Name '"+strings.ReplaceAll(pkg, "'", "''")+"' -ErrorAction SilentlyContinue | Format-List")
-	if err != nil || strings.TrimSpace(out) == "" {
-		return false, ""
+		"$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); $packages = @(Get-Package -ErrorAction Stop | Select-Object @{n='name';e={$_.Name}}, @{n='version';e={[string]$_.Version}}); ConvertTo-Json -InputObject $packages -Compress")
+	if err != nil {
+		return nil, err
 	}
-	return true, clip(out)
+	var packages []SoftwareInstallation
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(strings.TrimSpace(out), "\ufeff")), &packages); err != nil {
+		return nil, err
+	}
+	var entries []SoftwareInstallation
+	for _, entry := range packages {
+		if softwareNameMatches(entry.Name, match) {
+			entries = append(entries, entry)
+		}
+	}
+	return uniqueInstallations(entries), nil
 }
 
 func mapDrive(jobID, letter, unc, user, pass string) JobResult {

@@ -55,6 +55,7 @@ export type JobResult = {
 
 export type JobPayload = {
   package?: string;
+  match?: string;
   letter?: string;
   unc?: string;
   username?: string;
@@ -103,6 +104,8 @@ export type AgentJobResult = {
   via?: string;
   message: string;
   output?: string;
+  installed?: boolean;
+  installations?: SoftwareInstallation[];
 };
 
 export type CatalogApp = {
@@ -112,8 +115,14 @@ export type CatalogApp = {
   wingetId?: string;
 };
 
+export type SoftwareInstallation = {
+  name: string;
+  version?: string;
+};
+
 export type SoftwareInstall = {
   installed: boolean;
+  installations?: SoftwareInstallation[];
   lastChecked: number;
   via?: string;
   detail?: string;

@@ -202,6 +202,7 @@ function recordSoftwareStatus(
   result: AgentJobResult
 ) {
   if (job.kind !== "check" && job.kind !== "install" && job.kind !== "uninstall") return;
+  if (result.status !== "ok") return;
   const pkg = job.payload.package || "";
   const item = matchCatalog(store.software || [], pkg);
   if (!item) return;
@@ -215,13 +216,15 @@ function recordSoftwareStatus(
     installed = result.status === "ok" ? false : null;
   } else {
     const msg = result.message.toLowerCase();
-    if (msg.includes("not installed")) installed = false;
+    if (typeof result.installed === "boolean") installed = result.installed;
+    else if (msg.includes("not installed")) installed = false;
     else if (msg.includes("is installed")) installed = true;
   }
   if (installed == null) return;
 
   store.softwareStatus[machineId][item.id] = {
     installed,
+    installations: installed ? result.installations : undefined,
     lastChecked: Date.now(),
     via: result.via,
     detail: result.message,
@@ -278,6 +281,10 @@ export async function createJob(input: {
     results: {},
     status: "queued",
   };
+  if (input.kind === "check") {
+    const item = matchCatalog(store.software || [], input.payload.package || "");
+    if (item) job.payload.match = item.match || item.name;
+  }
   for (const id of ids) {
     const machine = store.machines[id];
     const skip =
