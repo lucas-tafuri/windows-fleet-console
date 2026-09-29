@@ -15,15 +15,15 @@ test('software versions survive client results and persistence without losing le
   const modules = new Map();
   function load(name) {
     if (modules.has(name)) return modules.get(name).exports;
-    const module = { exports: {} };
-    modules.set(name, module);
+    const loaded = { exports: {} };
+    modules.set(name, loaded);
     const source = readFileSync(new URL(`../lib/${name}.ts`, import.meta.url), 'utf8');
     const { outputText } = ts.transpileModule(source, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     });
-    new Function('exports', 'require', 'module', outputText)(module.exports,
-      name => name.startsWith('./') ? load(name.slice(2)) : require(name), module);
-    return module.exports;
+    new Function('exports', 'require', 'module', outputText)(loaded.exports,
+      name => name.startsWith('./') ? load(name.slice(2)) : require(name), loaded);
+    return loaded.exports;
   }
   try {
     const hub = load('hub');

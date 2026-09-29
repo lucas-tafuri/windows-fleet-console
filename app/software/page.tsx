@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { JobResults } from "@/components/job-results";
 import { useFleet } from "@/hooks/use-fleet";
 import { softwareNeedle } from "@/lib/catalog";
-import type { Job, SoftwareInstallation } from "@/lib/types";
+import type { Job } from "@/lib/types";
+import { SoftwareCell } from "@/components/software-cell";
 import { cn } from "@/lib/utils";
 
 export default function SoftwarePage() {
@@ -93,9 +94,11 @@ export default function SoftwarePage() {
         Select clients and check the catalog to refresh their versions.
       </p>
 
+      <details className="mt-5 rounded-xl border border-white/12 bg-card">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-200">Add software to catalog</summary>
       <form
         onSubmit={(e) => void onAdd(e)}
-        className="mt-5 grid gap-3 rounded-xl border border-white/8 bg-card/70 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+        className="grid gap-3 border-t border-white/10 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
       >
         <div className="grid gap-2">
           <Label htmlFor="sw-name">Name</Label>
@@ -123,18 +126,19 @@ export default function SoftwarePage() {
           <p className="text-sm text-destructive sm:col-span-3">{formError}</p>
         ) : null}
       </form>
+      </details>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[11px] text-primary">
+        <span className="text-sm font-medium text-primary">
           {selected.length} selected
         </span>
         <Button
-          variant="outline"
           disabled={busy || selected.length === 0 || data.software.length === 0}
           onClick={() => void checkCatalog()}
         >
           Check catalog
         </Button>
+        <span className="ml-auto text-sm text-slate-300">{data.machines.length} clients · {data.software.length} titles</span>
       </div>
 
       {loading ? (
@@ -142,25 +146,26 @@ export default function SoftwarePage() {
       ) : error ? (
         <p className="mt-6 text-sm text-destructive">{error}</p>
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-xl border border-white/8 bg-card/80">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-white/8 text-[11px] tracking-wide text-muted-foreground uppercase">
+        <div className="mt-4 max-h-[72vh] overflow-auto rounded-xl border border-white/15 bg-card" role="region" aria-label="Software versions by client" tabIndex={0}>
+          <table className="w-full border-separate border-spacing-0 text-left text-sm">
+            <caption className="sr-only">Installed versions by client. Open Details for installation names and check times.</caption>
+            <thead className="text-sm text-slate-100">
               <tr>
-                <th className="w-10 px-3 py-2.5">
+                <th scope="col" className="sticky top-0 left-0 z-30 w-12 min-w-12 border-b border-white/15 bg-[#22272e] px-4 py-4">
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={(v) => toggleAll(Boolean(v))}
                     aria-label="Select all machines"
                   />
                 </th>
-                <th className="px-2 py-2.5 font-medium">Host</th>
+                <th scope="col" className="sticky top-0 left-12 z-30 min-w-32 border-r border-b border-white/15 bg-[#22272e] px-4 py-4 font-semibold">Client</th>
                 {data.software.map((item) => (
-                  <th key={item.id} className="px-2 py-2.5 font-medium">
+                  <th scope="col" key={item.id} className="sticky top-0 z-20 min-w-60 border-r border-b border-white/15 bg-[#22272e] px-5 py-4 font-semibold">
                     <div className="flex flex-col gap-1">
                       <span>{item.name}</span>
                       <button
                         type="button"
-                        className="w-fit text-[10px] tracking-normal text-primary normal-case hover:underline disabled:text-muted-foreground"
+                        className="w-fit rounded py-1 text-xs font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary disabled:text-slate-400"
                         disabled={busy || selected.length === 0}
                         onClick={() => void checkApp(item.id)}
                       >
@@ -169,44 +174,29 @@ export default function SoftwarePage() {
                     </div>
                   </th>
                 ))}
-                <th className="px-2 py-2.5 font-medium"> </th>
               </tr>
             </thead>
             <tbody>
               {data.machines.map((m) => (
-                <tr key={m.id} className="border-b border-white/6 last:border-0">
-                  <td className="px-3 py-2.5">
+                <tr key={m.id} className={cn(selected.includes(m.id) ? "bg-[#28271e]" : "odd:bg-[#191c20] even:bg-[#1e2227]")}>
+                  <td className="sticky left-0 z-10 border-b border-white/10 bg-inherit px-4 py-5 align-top">
                     <Checkbox
                       checked={selected.includes(m.id)}
                       onCheckedChange={(v) => toggleOne(m.id, Boolean(v))}
                       aria-label={`Select ${m.hostname}`}
                     />
                   </td>
-                  <td className="px-2 py-2.5 font-mono text-[13px]">
+                  <th scope="row" className="sticky left-12 z-10 border-r border-b border-white/15 bg-inherit px-4 py-5 align-top text-base font-semibold text-white">
                     {m.hostname}
-                  </td>
+                  </th>
                   {data.software.map((item) => {
                     const cell = data.softwareStatus[m.id]?.[item.id];
                     return (
-                      <td key={item.id} className="px-2 py-2.5">
-                        <StatusPill installed={cell?.installed} known={Boolean(cell)} />
-                        {cell?.installed ? (
-                          <ul className="mt-1.5 space-y-1 text-xs">
-                            {cell.installations?.length ? cell.installations.map((entry, index) => (
-                              <li key={`${entry.name}-${entry.version}-${index}`}>
-                                <span className="block text-muted-foreground">{entry.name}</span>
-                                <span className="font-mono">{installationVersion(entry)}</span>
-                              </li>
-                            )) : <li className="text-muted-foreground">Version unavailable — check again after updating the agent</li>}
-                          </ul>
-                        ) : null}
-                        {cell ? <p className="mt-1 text-[10px] text-muted-foreground" title={cell.detail}>
-                          Checked {new Date(cell.lastChecked).toLocaleString()}
-                        </p> : null}
+                      <td key={item.id} className="border-r border-b border-white/10 px-5 py-5 align-top">
+                        <SoftwareCell value={cell} title={item.name} />
                       </td>
                     );
                   })}
-                  <td />
                 </tr>
               ))}
             </tbody>
@@ -247,33 +237,5 @@ export default function SoftwarePage() {
         </div>
       ) : null}
     </div>
-  );
-}
-
-function installationVersion(entry: SoftwareInstallation) {
-  return entry.version || "Version unavailable";
-}
-
-function StatusPill({
-  installed,
-  known,
-}: {
-  installed?: boolean;
-  known: boolean;
-}) {
-  if (!known) {
-    return <span className="text-xs text-muted-foreground">Unknown</span>;
-  }
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[11px]",
-        installed
-          ? "bg-primary/15 text-primary"
-          : "bg-white/6 text-muted-foreground"
-      )}
-    >
-      {installed ? "Installed" : "Missing"}
-    </span>
   );
 }
