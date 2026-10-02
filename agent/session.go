@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// The worker has the user's token, never the background agent's SYSTEM token.
+// The worker uses the user's token (elevated only for package changes), never SYSTEM.
 func runSessionJobFile(file string) {
 	raw, err := os.ReadFile(file)
 	if err != nil {
@@ -18,7 +18,7 @@ func runSessionJobFile(file string) {
 	}
 	var result JobResult
 	switch job.Kind {
-	case "check", "install", "uninstall", "map_drive", "unmap_drive", "clean_downloads", "empty_recycle", "launch":
+	case "check", "install", "uninstall", "map_drive", "unmap_drive", "maintain_drives", "clean_downloads", "empty_recycle", "launch":
 		background = false
 		result = runJob(job)
 	default:
@@ -28,7 +28,7 @@ func runSessionJobFile(file string) {
 	if err != nil {
 		os.Exit(1)
 	}
-	if os.WriteFile(filepath.Join(filepath.Dir(file), "result.json"), output, 0600) != nil {
+	if os.WriteFile(filepath.Join(filepath.Dir(file), "output", "result.json"), output, 0600) != nil {
 		os.Exit(1)
 	}
 }

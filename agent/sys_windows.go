@@ -374,79 +374,11 @@ func getPackageInstallations(match string) ([]SoftwareInstallation, error) {
 	return uniqueInstallations(entries), nil
 }
 
-func mapDrive(jobID, letter, unc, user, pass string) JobResult {
-	if letter == "" || unc == "" {
-		return JobResult{JobID: jobID, Status: "error", Message: "drive letter and UNC path are required"}
-	}
-	letter = strings.ToUpper(strings.TrimSuffix(letter, ":"))
-	spec := letter + ":"
-	unc = strings.TrimSpace(unc)
-
-	if skip, via, msg, out := alreadyMapped(letter, unc); skip {
-		return JobResult{JobID: jobID, Status: "ok", Via: via, Message: msg, Output: out}
-	}
-
-	args := []string{"use", spec, unc, "/persistent:no"}
-	if user != "" {
-		args = append(args, "/user:"+user)
-		if pass != "" {
-			args = append(args, pass)
-		}
-	}
-	out, err := runCmd("net", args...)
-	if err == nil {
-		return JobResult{JobID: jobID, Status: "ok", Via: "net use", Message: "Mapped " + spec + " to " + unc, Output: clip(out)}
-	}
-	if err2 := wnetAdd(spec, unc, user, pass); err2 == nil {
-		return JobResult{JobID: jobID, Status: "ok", Via: "WNetAddConnection2", Message: "Mapped " + spec + " to " + unc, Output: clip(out)}
-	} else {
-		return JobResult{JobID: jobID, Status: "error", Via: "net use", Message: "Map failed for " + spec, Output: clip(out + "\n" + err2.Error())}
-	}
-}
-
-func alreadyMapped(letter, unc string) (bool, string, string, string) {
-	spec := letter + ":"
-	want := normalizeUNC(unc)
-	drives := listDrives()
-	for _, d := range drives {
-		if strings.EqualFold(d.Letter, letter) {
-			have := normalizeUNC(d.Path)
-			if have == want {
-				return true, "already mapped", "Already mapped " + spec + " to " + d.Path + "; skipped", d.Path
-			}
-			return true, "already mapped", "Already mapped " + spec + " to " + d.Path + "; left unchanged", d.Path
-		}
-	}
-	for _, d := range drives {
-		if normalizeUNC(d.Path) == want && want != "" {
-			return true, "already mapped", "Already mapped " + d.Letter + ": to " + d.Path + "; skipped", d.Path
-		}
-	}
-	return false, "", "", ""
-}
-
 func normalizeUNC(p string) string {
 	s := strings.TrimSpace(p)
 	s = strings.ReplaceAll(s, "/", `\`)
 	s = strings.TrimRight(s, `\`)
 	return strings.ToLower(s)
-}
-
-func unmapDrive(jobID, letter string) JobResult {
-	if letter == "" {
-		return JobResult{JobID: jobID, Status: "error", Message: "drive letter is required"}
-	}
-	letter = strings.TrimSuffix(letter, ":")
-	spec := letter + ":"
-	out, err := runCmd("net", "use", spec, "/delete", "/y")
-	if err == nil {
-		return JobResult{JobID: jobID, Status: "ok", Via: "net use", Message: "Unmapped " + spec, Output: clip(out)}
-	}
-	if err2 := wnetCancel(spec); err2 == nil {
-		return JobResult{JobID: jobID, Status: "ok", Via: "WNetCancelConnection2", Message: "Unmapped " + spec, Output: clip(out)}
-	} else {
-		return JobResult{JobID: jobID, Status: "error", Via: "net use", Message: "Unmap failed for " + spec, Output: clip(out + "\n" + err2.Error())}
-	}
 }
 
 type netResource struct {
@@ -471,18 +403,18 @@ func wnetAdd(local, remote, user, pass string) error {
 	if pass != "" {
 		p, _ = windows.UTF16PtrFromString(pass)
 	}
-	r, _, err := procWNetAddConnection2W.Call(uintptr(unsafe.Pointer(&nr)), uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(u)), 0)
+	r, _, _ := procWNetAddConnection2W.Call(uintptr(unsafe.Pointer(&nr)), uintptr(unsafe.Pointer(p)), uintptr(unsafe.Pointer(u)), 0)
 	if r != 0 {
-		return err
+		return syscall.Errno(r)
 	}
 	return nil
 }
 
 func wnetCancel(local string) error {
 	ln, _ := windows.UTF16PtrFromString(local)
-	r, _, err := procWNetCancelConnection2W.Call(uintptr(unsafe.Pointer(ln)), 0, 1)
+	r, _, _ := procWNetCancelConnection2W.Call(uintptr(unsafe.Pointer(ln)), 0, 1)
 	if r != 0 {
-		return err
+		return syscall.Errno(r)
 	}
 	return nil
 }

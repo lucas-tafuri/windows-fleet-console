@@ -115,6 +115,7 @@ func main() {
 
 	fmt.Printf("PrettyDamnFleet agent → %s (ws=%v) install=%s\n", client.Server, !client.HTTPOnly, dataDir)
 
+	go monitorDrives()
 	go runLoop(client)
 	if background {
 		waitSignal()

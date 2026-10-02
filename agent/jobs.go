@@ -1,11 +1,20 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
+
+var driveJobs sync.Mutex
 
 func runJob(job AssignedJob) JobResult {
+	if job.Kind == "map_drive" || job.Kind == "unmap_drive" || job.Kind == "maintain_drives" {
+		driveJobs.Lock()
+		defer driveJobs.Unlock()
+	}
 	if background {
 		switch job.Kind {
-		case "check", "install", "uninstall", "map_drive", "unmap_drive", "clean_downloads", "empty_recycle", "launch":
+		case "check", "install", "uninstall", "map_drive", "unmap_drive", "maintain_drives", "clean_downloads", "empty_recycle", "launch":
 			return runInteractiveJob(job)
 		}
 	}
@@ -18,6 +27,8 @@ func runJob(job AssignedJob) JobResult {
 	args := payloadString(job.Payload, "args")
 
 	switch job.Kind {
+	case "maintain_drives":
+		return maintainDrives(job.ID)
 	case "check":
 		return checkPackage(job.ID, pkg, payloadString(job.Payload, "match"))
 	case "install":
