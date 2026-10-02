@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "fs/promises";
+import { mkdir, open, readFile, rename, rm } from "fs/promises";
 import path from "path";
 import { randomBytes } from "crypto";
 import type { MapPrefs, StoreData } from "./types";
@@ -7,7 +7,7 @@ import { DEFAULT_SOFTWARE } from "./catalog";
 
 const DATA_DIR = process.env.FLEET_DATA_DIR || path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "fleet.json");
-const TMP = path.join(DATA_DIR, "fleet.json.tmp");
+const BACKUP = path.join(DATA_DIR, "fleet.json.bak");
 
 let cache: StoreData | null = null;
 let loading: Promise<StoreData> | null = null;
@@ -69,8 +69,24 @@ function emptyStore(): StoreData {
 }
 
 async function loadFromDisk(): Promise<StoreData> {
+  let raw: string;
   try {
-    const raw = await readFile(FILE, "utf8");
+    raw = await readFile(FILE, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    // A missing primary beside a backup is a recovery case, not a new fleet.
+    try {
+      await readFile(BACKUP);
+    } catch (backupError) {
+      if ((backupError as NodeJS.ErrnoException).code !== "ENOENT") throw backupError;
+      const store = emptyStore();
+      seedDemoMachines(store);
+      await persist(store);
+      return store;
+    }
+    throw new Error("Fleet data is missing but a backup exists. Run scripts/repair-fleet-store.mjs to inspect recovery options.");
+  }
+  try {
     const parsed = JSON.parse(raw) as StoreData;
     if (!parsed.machines) parsed.machines = {};
     if (!parsed.jobs) parsed.jobs = [];
@@ -104,20 +120,44 @@ async function loadFromDisk(): Promise<StoreData> {
     if (dirty) await persist(parsed);
     return parsed;
   } catch (error) {
-    // Never replace existing enrollment data after a read or parse failure.
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    const store = emptyStore();
-    seedDemoMachines(store);
-    await persist(store);
-    return store;
+    // Do not include parser excerpts, which can contain saved credentials.
+    if (error instanceof SyntaxError) {
+      throw new Error("Saved fleet data is invalid; it has been left unchanged. Run scripts/repair-fleet-store.mjs to inspect recovery options.");
+    }
+    throw error;
+  }
+}
+
+async function durableReplace(file: string, json: string): Promise<void> {
+  const temporary = `${file}.${process.pid}-${randomBytes(8).toString("hex")}.tmp`;
+  try {
+    const handle = await open(temporary, "wx", 0o600);
+    try {
+      await handle.writeFile(json, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temporary, file);
+  } finally {
+    await rm(temporary, { force: true });
   }
 }
 
 async function persist(store: StoreData): Promise<void> {
   await mkdir(DATA_DIR, { recursive: true });
   const json = JSON.stringify(store, null, 2);
-  await writeFile(TMP, json, "utf8");
-  await rename(TMP, FILE);
+  let previous: string | undefined;
+  try {
+    previous = await readFile(FILE, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  // Save the previous complete state before replacing the primary. If the
+  // primary was damaged externally, refuse the write and retain the backup.
+  if (previous !== undefined) JSON.parse(previous);
+  await durableReplace(BACKUP, previous ?? json);
+  await durableReplace(FILE, json);
 }
 
 export async function getStore(): Promise<StoreData> {

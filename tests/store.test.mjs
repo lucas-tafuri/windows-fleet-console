@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -35,9 +35,19 @@ test('enrollment survives reloads; corrupt state is preserved; failed writes can
     await assert.rejects(api.updateStore(() => { throw new Error('temporary failure'); }));
     await api.updateStore(store => { store.joins[0].hostname = 'still-paired'; });
     assert.equal((await reload().getStore()).joins[0].hostname, 'still-paired');
+    const backup = await readFile(path.join(dir, 'fleet.json.bak'), 'utf8');
+    assert.equal(JSON.parse(backup).fleetToken, 'original-token');
+    assert.equal(JSON.parse(backup).joins[0].id, 'approved-pc');
+    assert.equal(JSON.parse(backup).joins[0].hostname, undefined);
+    assert.equal((await readdir(dir)).some(name => name.endsWith('.tmp')), false);
     await writeFile(path.join(dir, 'fleet.json'), 'broken');
     await assert.rejects(reload().getStore());
     assert.equal(await readFile(path.join(dir, 'fleet.json'), 'utf8'), 'broken');
+    await assert.rejects(api.updateStore(store => { store.joins[0].hostname = 'must-not-overwrite'; }));
+    assert.equal(await readFile(path.join(dir, 'fleet.json.bak'), 'utf8'), backup);
+    await rm(path.join(dir, 'fleet.json'));
+    await assert.rejects(reload().getStore(), /backup exists/);
+    assert.equal(await readFile(path.join(dir, 'fleet.json.bak'), 'utf8'), backup);
   } finally {
     if (previousDir === undefined) delete process.env.FLEET_DATA_DIR;
     else process.env.FLEET_DATA_DIR = previousDir;
