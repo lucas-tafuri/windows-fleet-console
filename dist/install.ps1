@@ -11,6 +11,7 @@ param(
   [string]$Token = $env:FLEET_TOKEN,
   [switch]$HttpOnly,
   [switch]$NoPause,
+  [switch]$ResetPairing,
   [string]$Repo = "https://github.com/lucas-tafuri/windows-fleet-console.git"
 )
 
@@ -191,18 +192,25 @@ try {
     throw "Run this installer as administrator to enable startup before Windows sign-in."
   }
   New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
-  # Preserve existing pairing when upgrading the old per-user installation.
-  foreach ($name in @("config.json", "machine-id")) {
-    $dest = Join-Path $installRoot $name
-    $old = Join-Path $legacyRoot $name
-    if (-not (Test-Path $dest) -and (Test-Path $old)) { Copy-Item -LiteralPath $old -Destination $dest }
-  }
-  $savedPath = Join-Path $installRoot "config.json"
-  if (Test-Path $savedPath) {
-    $saved = Get-Content -Raw -LiteralPath $savedPath | ConvertFrom-Json
-    if (-not $Server) { $Server = $saved.server }
-    if (-not $Token -and $Server.TrimEnd('/') -eq ([string]$saved.server).TrimEnd('/')) { $Token = $saved.token }
-    if ($saved.httpOnly) { $HttpOnly = $true }
+  if ($ResetPairing) {
+    # Rediscovery must not reuse arguments, environment variables, or legacy
+    # credentials. Keep files until the new manager approves and the agent stops.
+    $Server = ""
+    $Token = ""
+  } else {
+    # Preserve existing pairing when upgrading the old per-user installation.
+    foreach ($name in @("config.json", "machine-id")) {
+      $dest = Join-Path $installRoot $name
+      $old = Join-Path $legacyRoot $name
+      if (-not (Test-Path $dest) -and (Test-Path $old)) { Copy-Item -LiteralPath $old -Destination $dest }
+    }
+    $savedPath = Join-Path $installRoot "config.json"
+    if (Test-Path $savedPath) {
+      $saved = Get-Content -Raw -LiteralPath $savedPath | ConvertFrom-Json
+      if (-not $Server) { $Server = $saved.server }
+      if (-not $Token -and $Server.TrimEnd('/') -eq ([string]$saved.server).TrimEnd('/')) { $Token = $saved.token }
+      if ($saved.httpOnly) { $HttpOnly = $true }
+    }
   }
   $stamp = Get-Date -Format o
   Set-Content -Path $logTemp -Encoding ASCII -Value ("=== PrettyDamnFleet install " + $stamp + " ===")
@@ -214,6 +222,10 @@ try {
   Write-Host ("Also:     " + $logLocal)
   Write-Host ("Folder:   " + $here)
   Write-Host ""
+  if ($ResetPairing) {
+    Write-Host "Forgetting the old pairing and rediscovering the manager."
+    Write-Host "Approve this PC on the manager dashboard when it appears."
+  }
 
   if (-not $Server) {
     $Server = Find-FleetConsole
@@ -317,12 +329,20 @@ try {
     ($_.ExecutablePath -eq (Join-Path $installRoot 'fleet-agent.exe') -or
     $_.ExecutablePath -in $legacyExecutables) -and $_.CommandLine -notmatch '--session-job\b'
   } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  if ($ResetPairing) {
+    Write-Step "Removing the old token and machine identity"
+    foreach ($root in @($installRoot, $legacyRoot) | Select-Object -Unique) {
+      foreach ($name in @("config.json", "machine-id")) {
+        $pairingFile = Join-Path $root $name
+        if (Test-Path -LiteralPath $pairingFile) { Remove-Item -LiteralPath $pairingFile -Force }
+      }
+    }
+  }
   Set-Content -LiteralPath (Join-Path $installRoot 'boot-installed') -Value '1'
   $argList = @("--install-only","--server", $Server, "--token", $Token, "--data-dir", $installRoot)
   if ($HttpOnly) { $argList += "--http-only" }
 
-  Write-Step "Starting the agent (preserves pairing and registers Windows boot startup)"
-  Write-Host "Saving the existing pairing and installing the agent."
+  Write-Step "Saving pairing and registering Windows boot startup"
   & $exe @argList
   $agentExit = $LASTEXITCODE
   Write-Host ("Agent install exit code: " + $agentExit)
