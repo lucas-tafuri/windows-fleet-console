@@ -57,7 +57,7 @@ The host keeps `data/fleet.json` in the installed repository; retain this direct
 
 Boot tasks run as Local System so they can start before sign-in. Once someone signs in, software, drive mapping, Downloads cleanup, Recycle Bin, and launch jobs run through a temporary worker using that user's Windows session and profile. The local console session takes precedence; otherwise a single active Remote Desktop session is used. If no user is signed in, or multiple remote users make the target ambiguous, these jobs return a clear error. Pairing and monitoring continue without a signed-in user. Foreground hung-window detection is unavailable in the background session.
 
-Background startup does not display a tray icon; open the dashboard in a browser. Protect the host installation directory from modification by untrusted users because its startup task runs with system privileges. Rerun the host installer after updating the checkout to refresh its installed launcher; it retains fleet data.
+The background agent starts before sign-in. The updated client installer also registers a separate tray icon for signed-in users; its Open manager action opens the dashboard, and hiding the icon leaves monitoring running. Protect the host installation directory from modification by untrusted users because its startup task runs with system privileges. Rerun the host installer after updating the checkout to refresh its installed launcher; it retains fleet data.
 
 ### Updating existing installations
 

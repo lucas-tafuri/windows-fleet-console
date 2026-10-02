@@ -5,3 +5,5 @@ package main
 func serveTray(_ *Client) {
 	waitSignal()
 }
+
+func serveCompanionTray() {}

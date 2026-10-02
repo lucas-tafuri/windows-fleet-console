@@ -217,6 +217,10 @@ func dispatchInteractiveJob(job AssignedJob) (result JobResult, err error) {
 	if err = os.WriteFile(input, raw, 0600); err != nil {
 		return result, err
 	}
+	stage = "grant user access to job request"
+	if err = setSessionJobACL(input, user.User.Sid.String(), false); err != nil {
+		return result, err
+	}
 
 	var env *uint16
 	stage = "create user environment"
@@ -235,21 +239,27 @@ func dispatchInteractiveJob(job AssignedJob) (result JobResult, err error) {
 	if err = copyFile(exe, worker); err != nil {
 		return result, err
 	}
+	// Set the executable ACL after copying/renaming instead of relying on the
+	// source file or temporary copy to inherit the user's execute permission.
+	stage = "grant user access to session worker"
+	if err = setSessionJobACL(worker, user.User.Sid.String(), false); err != nil {
+		return result, err
+	}
 	exe = worker
 	app, _ := windows.UTF16PtrFromString(exe)
 	command, _ := windows.UTF16PtrFromString(windows.ComposeCommandLine([]string{exe, "--session-job", input}))
-	// Non-UI jobs do not need access to the interactive window station.
-	desktopName := ""
-	if job.Kind == "launch" {
-		desktopName = `winsta0\default`
-	}
-	desktop, _ := windows.UTF16PtrFromString(desktopName)
+	// All workers belong to an existing interactive logon. Select its desktop
+	// explicitly; CREATE_NO_WINDOW still keeps console jobs invisible.
+	desktop, _ := windows.UTF16PtrFromString(`winsta0\default`)
 	cwd, _ := windows.UTF16PtrFromString(dir)
 	si := windows.StartupInfo{Desktop: desktop}
 	si.Cb = uint32(unsafe.Sizeof(si))
 	var pi windows.ProcessInformation
 	stage = "start user-session worker"
 	if err = windows.CreateProcessAsUser(token, app, command, nil, nil, false, windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW, env, cwd, &si, &pi); err != nil {
+		if err == windows.ERROR_ACCESS_DENIED {
+			err = fmt.Errorf("%w (Windows error 5; user %s, desktop winsta0\\default). Verify application-control policy allows FleetConsole\\session-job-*\\fleet-session-worker.exe and that the selected user's desktop is accessible", err, user.User.Sid.String())
+		}
 		return result, err
 	}
 	windows.CloseHandle(pi.Thread)
@@ -282,6 +292,18 @@ func dispatchInteractiveJob(job AssignedJob) (result JobResult, err error) {
 		return JobResult{}, fmt.Errorf("invalid session worker result")
 	}
 	return result, nil
+}
+
+func setSessionJobACL(path, sid string, writable bool) error {
+	sd, err := windows.SecurityDescriptorFromString(sessionJobSDDL(sid, writable))
+	if err != nil {
+		return err
+	}
+	acl, _, err := sd.DACL()
+	if err != nil {
+		return err
+	}
+	return windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
 }
 
 func sessionJobSDDL(sid string, writable bool) string {

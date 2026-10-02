@@ -15,6 +15,7 @@ var installOnly bool
 
 func main() {
 	sessionJob := flag.String("session-job", "", "Run one job in the signed-in user's session")
+	trayOnly := flag.Bool("tray-only", false, "Show a tray icon for the installed background agent")
 	waitForInstance := flag.Bool("wait-for-instance", false, "Wait for the installing parent to exit")
 	flag.BoolVar(&background, "background", false, "Run without a tray for Windows boot startup")
 	flag.BoolVar(&installOnly, "install-only", false, "Save configuration and install without starting")
@@ -25,6 +26,18 @@ func main() {
 	flag.Parse()
 	if *sessionJob != "" {
 		runSessionJobFile(*sessionJob)
+		return
+	}
+	if *trayOnly {
+		dataDir = *dataDirFlag
+		if dataDir == "" {
+			dataDir = bootInstallDir()
+		}
+		if dataDir == "" {
+			fmt.Fprintln(os.Stderr, "tray requires an installed agent or --data-dir")
+			return
+		}
+		serveCompanionTray()
 		return
 	}
 	// Reject duplicate launches before touching pairing, files, or startup tasks.

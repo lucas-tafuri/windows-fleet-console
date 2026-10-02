@@ -47,3 +47,31 @@ func trayUpdate(c *Client) {
 	spawnRestart(c)
 	os.Exit(0)
 }
+
+// This companion never starts a client or modifies pairing. Its local mutex is
+// scoped to the user's Windows session, independently of the SYSTEM agent.
+func serveCompanionTray() {
+	release, err := acquireNamedInstance(`Local\PrettyDamnFleetTray`, false)
+	if err != nil {
+		return
+	}
+	defer release()
+	agentCfg = loadConfig()
+	_ = wintray.Run(wintray.Config{
+		Tooltip: "PrettyDamnFleet Agent",
+		Items: []wintray.Item{
+			{ID: trayUpdateID, Title: "Open manager"},
+			{ID: trayCloseID, Title: "Hide tray icon"},
+		},
+		OnCommand: func(id uint32) {
+			switch id {
+			case trayUpdateID:
+				if agentCfg.Server != "" {
+					_ = shellExec(agentCfg.Server, "")
+				}
+			case trayCloseID:
+				wintray.Quit()
+			}
+		},
+	})
+}

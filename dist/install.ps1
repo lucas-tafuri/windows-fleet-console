@@ -373,9 +373,26 @@ while ($true) {
   $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
   $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
   Register-ScheduledTask -TaskName 'Fleet Console Agent' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+
+  Write-Step "Installing the user tray icon"
+  # A separate executable leaves the resident agent free to replace its own
+  # binary during Update. The tray never starts a second monitoring client.
+  $trayExe = Join-Path $installRoot 'fleet-tray.exe'
+  $trayTask = Get-ScheduledTask -TaskName 'Fleet Console Tray' -ErrorAction SilentlyContinue
+  if ($trayTask) { Stop-ScheduledTask -TaskName 'Fleet Console Tray' }
+  Get-CimInstance Win32_Process -Filter "Name='fleet-tray.exe'" | Where-Object {
+    $_.ExecutablePath -eq $trayExe
+  } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  Copy-Item -LiteralPath $installed -Destination $trayExe -Force
+  $trayAction = New-ScheduledTaskAction -Execute $trayExe -Argument ('--tray-only --data-dir "' + $installRoot + '"')
+  $trayTrigger = New-ScheduledTaskTrigger -AtLogOn
+  $trayPrincipal = New-ScheduledTaskPrincipal -GroupId 'S-1-5-32-545' -RunLevel Limited
+  $traySettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel
+  Register-ScheduledTask -TaskName 'Fleet Console Tray' -Action $trayAction -Trigger $trayTrigger -Principal $trayPrincipal -Settings $traySettings -Force | Out-Null
   $oldStartup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\FleetConsole.cmd'
   if (Test-Path $oldStartup) { Remove-Item -LiteralPath $oldStartup }
   Start-ScheduledTask -TaskName 'Fleet Console Agent'
+  Start-ScheduledTask -TaskName 'Fleet Console Tray'
   Start-Sleep -Seconds 2
   $running = @(Get-CimInstance Win32_Process -Filter "Name='fleet-agent.exe'" | Where-Object { $_.CommandLine -notmatch '--session-job\b' })
   if ($running.Count -gt 1) { throw "Multiple resident agents are still running. Close older manually launched copies and rerun this installer." }
