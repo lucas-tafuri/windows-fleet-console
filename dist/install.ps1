@@ -187,6 +187,11 @@ function Request-FleetApproval {
 }
 
 try {
+  # Log before checking permissions or reading saved pairing so early failures
+  # are recorded too. The CMD launcher separately logs parameter/parse errors.
+  $stamp = Get-Date -Format o
+  Set-Content -Path $logTemp -Encoding ASCII -Value ("=== PrettyDamnFleet install " + $stamp + " ===")
+  try { Start-Transcript -Path $logTemp -Append -Force | Out-Null } catch {}
   $admin = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
   if (-not $admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw "Run this installer as administrator to enable startup before Windows sign-in."
@@ -212,10 +217,6 @@ try {
       if ($saved.httpOnly) { $HttpOnly = $true }
     }
   }
-  $stamp = Get-Date -Format o
-  Set-Content -Path $logTemp -Encoding ASCII -Value ("=== PrettyDamnFleet install " + $stamp + " ===")
-  try { Start-Transcript -Path $logTemp -Append -Force | Out-Null } catch {}
-
   Write-Host ""
   Write-Host "PrettyDamnFleet client installer" -ForegroundColor Cyan
   Write-Host ("Log file: " + $logTemp)
