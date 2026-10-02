@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -138,6 +139,7 @@ func interactiveUser() string {
 func runInteractiveJob(job AssignedJob) JobResult {
 	result, err := dispatchInteractiveJob(job)
 	if err != nil {
+		logf("User-session action %s failed: %v", job.Kind, err)
 		return JobResult{JobID: job.ID, Status: "error", Message: "User-session action failed: " + err.Error()}
 	}
 	return result
@@ -256,30 +258,24 @@ func dispatchInteractiveJob(job AssignedJob) (result JobResult, err error) {
 	si.Cb = uint32(unsafe.Sizeof(si))
 	var pi windows.ProcessInformation
 	stage = "start user-session worker"
-	if err = windows.CreateProcessAsUser(token, app, command, nil, nil, false, windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW, env, cwd, &si, &pi); err != nil {
-		if err == windows.ERROR_ACCESS_DENIED {
-			err = fmt.Errorf("%w (Windows error 5; user %s, desktop winsta0\\default). Verify application-control policy allows FleetConsole\\session-job-*\\fleet-session-worker.exe and that the selected user's desktop is accessible", err, user.User.Sid.String())
+	launchErr := windows.CreateProcessAsUser(token, app, command, nil, nil, false, windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW, env, cwd, &si, &pi)
+	if useScheduledSessionWorker(job.Kind, launchErr) {
+		// Task Scheduler brokers the existing interactive logon without a password
+		// or elevation. Retry only when no process was created, never after a job ran.
+		logf("Direct user-session launch denied for %s; trying Task Scheduler for user %s", job.Kind, user.User.Sid.String())
+		err = runScheduledSessionWorker(token, user.User.Sid.String(), worker, input)
+		if err != nil {
+			return result, fmt.Errorf("direct launch: %v; Task Scheduler launch: %w (user %s, worker %s)", launchErr, err, user.User.Sid.String(), worker)
 		}
-		return result, err
-	}
-	windows.CloseHandle(pi.Thread)
-	defer windows.CloseHandle(pi.Process)
-	stage = "wait for session worker"
-	status, err := windows.WaitForSingleObject(pi.Process, 10*60*1000)
-	if err != nil || status != windows.WAIT_OBJECT_0 {
-		kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.FormatUint(uint64(pi.ProcessId), 10))
-		kill.SysProcAttr = &windows.SysProcAttr{HideWindow: true}
-		_ = kill.Run()
-		return result, fmt.Errorf("session worker timed out or could not be monitored")
+	} else if launchErr != nil {
+		return result, fmt.Errorf("%w (user %s, worker %s, desktop winsta0\\default)", launchErr, user.User.Sid.String(), worker)
+	} else {
+		stage = "wait for session worker"
+		if err = waitSessionWorker(pi); err != nil {
+			return result, err
+		}
 	}
 	stage = "read session worker result"
-	var exitCode uint32
-	if err = windows.GetExitCodeProcess(pi.Process, &exitCode); err != nil {
-		return result, err
-	}
-	if exitCode != 0 {
-		return result, fmt.Errorf("worker exited with code 0x%08X; verify application-control policy permits fleet-session-worker.exe", exitCode)
-	}
 	file, err := os.Open(filepath.Join(outputDir, "result.json"))
 	if err != nil {
 		return result, fmt.Errorf("session worker returned no result: %w", err)
@@ -292,6 +288,30 @@ func dispatchInteractiveJob(job AssignedJob) (result JobResult, err error) {
 		return JobResult{}, fmt.Errorf("invalid session worker result")
 	}
 	return result, nil
+}
+
+func useScheduledSessionWorker(kind string, launchErr error) bool {
+	return !packageJobNeedsAdmin(kind) && errors.Is(launchErr, windows.ERROR_ACCESS_DENIED)
+}
+
+func waitSessionWorker(pi windows.ProcessInformation) error {
+	windows.CloseHandle(pi.Thread)
+	defer windows.CloseHandle(pi.Process)
+	status, err := windows.WaitForSingleObject(pi.Process, 10*60*1000)
+	if err != nil || status != windows.WAIT_OBJECT_0 {
+		kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.FormatUint(uint64(pi.ProcessId), 10))
+		kill.SysProcAttr = &windows.SysProcAttr{HideWindow: true}
+		_ = kill.Run()
+		return fmt.Errorf("session worker timed out or could not be monitored")
+	}
+	var exitCode uint32
+	if err := windows.GetExitCodeProcess(pi.Process, &exitCode); err != nil {
+		return err
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("worker exited with code 0x%08X", exitCode)
+	}
+	return nil
 }
 
 func setSessionJobACL(path, sid string, writable bool) error {

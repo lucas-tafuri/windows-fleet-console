@@ -12,6 +12,8 @@ param(
   [switch]$HttpOnly,
   [switch]$NoPause,
   [switch]$ResetPairing,
+  [switch]$SkipRepoSync,
+  [string]$DataDir = (Join-Path $env:ProgramData 'FleetConsole'),
   [string]$Repo = "https://github.com/lucas-tafuri/windows-fleet-console.git"
 )
 
@@ -19,7 +21,7 @@ $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $logTemp = Join-Path $env:TEMP "fleet-console-install.log"
-$installRoot = Join-Path $env:ProgramData "FleetConsole"
+$installRoot = [IO.Path]::GetFullPath($DataDir)
 $legacyRoot = Join-Path $env:LOCALAPPDATA "FleetConsole"
 $logLocal = Join-Path $installRoot "install.log"
 $repoDir = Join-Path $installRoot "repo"
@@ -247,7 +249,10 @@ try {
   Write-Host ("Server: " + $Server)
 
   $haveGit = $false
-  if (Get-Command git -ErrorAction SilentlyContinue) {
+  if ($SkipRepoSync) {
+    $haveGit = [bool](Get-Command git -ErrorAction SilentlyContinue)
+    Write-Step "Using the already fetched update release"
+  } elseif (Get-Command git -ErrorAction SilentlyContinue) {
     $haveGit = $true
     Write-Step "Git is already installed"
   } else {
@@ -280,7 +285,7 @@ try {
   }
   Write-Host ("Agent: " + $exe)
 
-  if ($haveGit) {
+  if ($haveGit -and -not $SkipRepoSync) {
     Write-Step "Fetching the fleet repo (optional, for later Update)"
     $oldEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
@@ -330,6 +335,12 @@ try {
     ($_.ExecutablePath -eq (Join-Path $installRoot 'fleet-agent.exe') -or
     $_.ExecutablePath -in $legacyExecutables) -and $_.CommandLine -notmatch '--session-job\b'
   } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  # A previous executable-only update must not overwrite this installation on
+  # the supervisor's next loop. The selected source is already ready above.
+  foreach ($name in @('fleet-agent.exe.new', 'fleet-agent.exe.new.tmp')) {
+    $staleUpdate = Join-Path $installRoot $name
+    if (Test-Path -LiteralPath $staleUpdate) { Remove-Item -LiteralPath $staleUpdate -Force }
+  }
   if ($ResetPairing) {
     Write-Step "Removing the old token and machine identity"
     foreach ($root in @($installRoot, $legacyRoot) | Select-Object -Unique) {

@@ -10,7 +10,6 @@ import (
 const (
 	defaultRepo   = "https://github.com/lucas-tafuri/windows-fleet-console.git"
 	defaultBranch = "main"
-	defaultExeURL = "https://github.com/lucas-tafuri/windows-fleet-console/raw/main/dist/fleet-agent.exe"
 	taskName      = "Fleet Console Agent"
 )
 

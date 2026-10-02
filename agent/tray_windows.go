@@ -43,8 +43,11 @@ func trayUpdate(c *Client) {
 	if res.Status != "ok" {
 		return
 	}
+	if err := spawnRestart(c); err != nil {
+		logf("tray restart: %v", err)
+		return
+	}
 	restartRequested = false
-	spawnRestart(c)
 	os.Exit(0)
 }
 

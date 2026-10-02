@@ -10,4 +10,7 @@ func selfUpdate(jobID, repo, branch string) JobResult {
 	return unsupported(jobID, "self-update")
 }
 
-func spawnRestart(_ *Client) {}
+func spawnRestart(_ *Client) error { return nil }
+
+func readUpdateReceipt() *JobResult        { return nil }
+func acknowledgeUpdateReceipt(_ JobResult) {}

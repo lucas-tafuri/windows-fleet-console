@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -70,6 +71,9 @@ type Client struct {
 	MachineID string
 	OnID      func(string)
 	pending   []JobResult
+	pendingMu sync.Mutex
+	collectMu sync.Mutex
+	applyMu   sync.Mutex
 	wsFails   int
 }
 
@@ -87,6 +91,8 @@ func (c *Client) RunOnce() error {
 }
 
 func (c *Client) collect() Heartbeat {
+	c.collectMu.Lock()
+	defer c.collectMu.Unlock()
 	snap := collectSnapshot()
 	hb := Heartbeat{
 		Token:          c.Token,
@@ -102,22 +108,54 @@ func (c *Client) collect() Heartbeat {
 		LastInputAgeMs: snap.LastInputAgeMs,
 		MappedDrives:   snap.MappedDrives,
 	}
-	if len(c.pending) > 0 {
-		hb.Results = c.pending
-		c.pending = nil
+	if receipt := readUpdateReceipt(); receipt != nil {
+		c.addResult(*receipt)
 	}
+	c.pendingMu.Lock()
+	hb.Results = append([]JobResult(nil), c.pending...)
+	c.pendingMu.Unlock()
 	return hb
 }
 
+func (c *Client) addResult(result JobResult) {
+	c.pendingMu.Lock()
+	defer c.pendingMu.Unlock()
+	for i := range c.pending {
+		if c.pending[i].JobID == result.JobID {
+			c.pending[i] = result
+			return
+		}
+	}
+	c.pending = append(c.pending, result)
+}
+
+func (c *Client) acknowledgeResults(results []JobResult) {
+	c.pendingMu.Lock()
+	defer c.pendingMu.Unlock()
+	for _, sent := range results {
+		for i, pending := range c.pending {
+			if pending.JobID == sent.JobID && pending.Message == sent.Message && pending.Status == sent.Status {
+				c.pending = append(c.pending[:i], c.pending[i+1:]...)
+				break
+			}
+		}
+		acknowledgeUpdateReceipt(sent)
+	}
+}
+
 func (c *Client) apply(resp PollResponse) {
+	c.applyMu.Lock()
+	defer c.applyMu.Unlock()
+	c.collectMu.Lock()
 	if resp.MachineID != "" && resp.MachineID != c.MachineID {
 		c.MachineID = resp.MachineID
 		if c.OnID != nil {
 			c.OnID(c.MachineID)
 		}
 	}
+	c.collectMu.Unlock()
 	for _, job := range resp.Jobs {
-		c.pending = append(c.pending, runJob(job))
+		c.addResult(runJob(job))
 	}
 }
 
@@ -133,7 +171,8 @@ func (c *Client) runPoll() error {
 }
 
 func (c *Client) pollOnce() error {
-	body, _ := json.Marshal(c.collect())
+	hb := c.collect()
+	body, _ := json.Marshal(hb)
 	req, err := http.NewRequest(http.MethodPost, c.Server+"/api/agent/poll", bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -146,6 +185,9 @@ func (c *Client) pollOnce() error {
 		return err
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("poll: HTTP %d", res.StatusCode)
+	}
 	raw, _ := io.ReadAll(res.Body)
 	var resp PollResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
@@ -154,6 +196,7 @@ func (c *Client) pollOnce() error {
 	if !resp.OK {
 		return fmt.Errorf("poll: %s", resp.Error)
 	}
+	c.acknowledgeResults(hb.Results)
 	c.apply(resp)
 	c.maybeRestart()
 	return nil
@@ -163,14 +206,21 @@ func (c *Client) maybeRestart() {
 	if !restartRequested {
 		return
 	}
+	if err := c.pollOnceNoRestart(); err != nil {
+		logf("update result delivery: %v; retrying before restart", err)
+		return
+	}
+	if err := spawnRestart(c); err != nil {
+		logf("update restart: %v", err)
+		return
+	}
 	restartRequested = false
-	_ = c.pollOnceNoRestart()
-	spawnRestart(c)
 	os.Exit(0)
 }
 
 func (c *Client) pollOnceNoRestart() error {
-	body, _ := json.Marshal(c.collect())
+	hb := c.collect()
+	body, _ := json.Marshal(hb)
 	req, err := http.NewRequest(http.MethodPost, c.Server+"/api/agent/poll", bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -183,7 +233,23 @@ func (c *Client) pollOnceNoRestart() error {
 		return err
 	}
 	defer res.Body.Close()
-	io.Copy(io.Discard, res.Body)
+	var response PollResponse
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("result delivery: HTTP %d", res.StatusCode)
+	}
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		return err
+	}
+	if !response.OK {
+		return fmt.Errorf("result delivery: %s", response.Error)
+	}
+	c.acknowledgeResults(hb.Results)
+	// The server reserves returned jobs as running. Drain any work returned by
+	// this final poll and deliver its results rather than losing it on restart.
+	if len(response.Jobs) > 0 {
+		c.apply(response)
+		return c.pollOnceNoRestart()
+	}
 	return nil
 }
 
@@ -214,6 +280,8 @@ func (c *Client) runWS() error {
 	})
 
 	errCh := make(chan error, 1)
+	var writeMu, inflightMu sync.Mutex
+	var inflight [][]JobResult
 	go func() {
 		for {
 			_, data, err := conn.ReadMessage()
@@ -229,22 +297,31 @@ func (c *Client) runWS() error {
 				errCh <- fmt.Errorf("ws: %s", resp.Error)
 				return
 			}
-			c.apply(resp)
-			if restartRequested {
-				restartRequested = false
-				_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-				b, _ := json.Marshal(c.collect())
-				_ = conn.WriteMessage(websocket.TextMessage, b)
-				spawnRestart(c)
-				os.Exit(0)
+			inflightMu.Lock()
+			var acknowledged []JobResult
+			if len(inflight) > 0 {
+				acknowledged, inflight = inflight[0], inflight[1:]
 			}
+			inflightMu.Unlock()
+			c.acknowledgeResults(acknowledged)
+			c.apply(resp)
+			c.maybeRestart()
 		}
 	}()
 
 	send := func() error {
-		b, _ := json.Marshal(c.collect())
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		hb := c.collect()
+		b, _ := json.Marshal(hb)
 		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		return conn.WriteMessage(websocket.TextMessage, b)
+		inflightMu.Lock()
+		defer inflightMu.Unlock()
+		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+			return err
+		}
+		inflight = append(inflight, hb.Results)
+		return nil
 	}
 	if err := send(); err != nil {
 		return err
@@ -262,8 +339,11 @@ func (c *Client) runWS() error {
 				return err
 			}
 		case <-ping.C:
+			writeMu.Lock()
 			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			err := conn.WriteMessage(websocket.PingMessage, nil)
+			writeMu.Unlock()
+			if err != nil {
 				return err
 			}
 		}
