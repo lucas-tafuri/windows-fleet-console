@@ -41,8 +41,15 @@ type ActionSheetProps = {
 };
 
 export function ActionSheet(props: ActionSheetProps) {
-  // Each opening starts a fresh form from saved preferences; live snapshots never overwrite edits.
-  return <Sheet open={props.open} onOpenChange={props.onOpenChange}><ActionSheetSession key={`${props.action}:${props.open}`} {...props} /></Sheet>;
+  // Keep the portal/popup mounted across open changes so the dialog can finish
+  // its exit transition and remove the backdrop. Only reset the form state.
+  return (
+    <Sheet open={props.open} onOpenChange={props.onOpenChange}>
+      <SheetContent side="right" className="action-panel w-full gap-0 sm:max-w-lg" showCloseButton>
+        <ActionSheetSession key={`${props.action}:${props.open}`} {...props} />
+      </SheetContent>
+    </Sheet>
+  );
 }
 
 function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob, software, mapPrefs, onSubmit }: ActionSheetProps) {
@@ -125,11 +132,7 @@ function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob
   }
 
   return (
-      <SheetContent
-        side="right"
-        className="action-panel w-full gap-0 sm:max-w-lg"
-        showCloseButton
-      >
+      <>
         <SheetHeader className="action-panel-header">
           <div className="action-heading-icon"><ActionIcon className="size-5" /></div>
           <p className="fleet-eyebrow">FLEET ACTION</p>
@@ -322,7 +325,7 @@ function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob
             </Button>
           </div>
         </SheetFooter>
-      </SheetContent>
+      </>
   );
 }
 
