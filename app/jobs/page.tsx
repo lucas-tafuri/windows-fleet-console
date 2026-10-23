@@ -95,8 +95,8 @@ export default function JobsPage() {
           <DialogHeader>
             <DialogTitle>Clear job history?</DialogTitle>
             <DialogDescription>
-              This removes every recorded job from this console. It does not
-              change software on the PCs.
+              This hides jobs on this dashboard. Execution identities and fleet
+              history remain stored so old work cannot run again.
             </DialogDescription>
           </DialogHeader>
           {clearError ? (

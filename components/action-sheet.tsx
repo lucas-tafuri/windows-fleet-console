@@ -16,6 +16,7 @@ import {
 import { JobResults } from "@/components/job-results";
 import { softwareNeedle } from "@/lib/catalog";
 import type { CatalogApp, Job, JobKind, JobPayload, MapPrefs } from "@/lib/types";
+import type { DeliveryOptions } from "@/hooks/use-fleet";
 
 export type ActionKey =
   | "package"
@@ -37,7 +38,7 @@ type ActionSheetProps = {
   lastJob: Job | null;
   software: CatalogApp[];
   mapPrefs: MapPrefs;
-  onSubmit: (kind: JobKind, payload: JobPayload) => Promise<void>;
+  onSubmit: (kind: JobKind, payload: JobPayload, options?: DeliveryOptions) => Promise<void>;
 };
 
 export function ActionSheet(props: ActionSheetProps) {
@@ -52,7 +53,11 @@ export function ActionSheet(props: ActionSheetProps) {
   );
 }
 
-function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob, software, mapPrefs, onSubmit }: ActionSheetProps) {
+function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob, software, mapPrefs, onSubmit: submit }: ActionSheetProps) {
+  const [queueOffline, setQueueOffline] = useState(false);
+  const [expiresAt, setExpiresAt] = useState(() => new Date(Date.now() + 86_400_000).toISOString());
+  const [release, setRelease] = useState("");
+  const onSubmit = (kind: JobKind, payload: JobPayload) => submit(kind, payload, queueOffline ? { delivery: "queued", expiresAt: Date.parse(expiresAt) } : { delivery: "online" });
   const [pkgId, setPkgId] = useState("");
   const [pkgMode, setPkgMode] = useState<"check" | "install" | "uninstall">(
     "check"
@@ -63,10 +68,6 @@ function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob
   const [password, setPassword] = useState(mapPrefs.password || "");
   const [target, setTarget] = useState("notepad.exe");
   const [args, setArgs] = useState("");
-  const [repo, setRepo] = useState(
-    "https://github.com/lucas-tafuri/windows-fleet-console.git"
-  );
-  const [branch, setBranch] = useState("main");
   const [error, setError] = useState<string | null>(null);
 
   const [submitted, setSubmitted] = useState(false);
@@ -121,8 +122,7 @@ function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob
         });
       } else if (action === "update") {
         await onSubmit("self_update", {
-          repo: repo.trim(),
-          branch: branch.trim() || "main",
+          release: release.trim(),
         });
       }
       setSubmitted(true);
@@ -282,33 +282,27 @@ function ActionSheetSession({ onOpenChange, action, selectedCount, busy, lastJob
           {action === "update" ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Each selected PC runs <span className="font-mono">git pull</span>{" "}
-                in its fleet checkout, replaces the agent, and restarts. If Git
-                is missing it clones or downloads{" "}
-                <span className="font-mono">fleet-agent.exe</span> from GitHub.
-                Saved pairing and automatic startup are preserved.
+                Each PC verifies the signed release, stages it locally, then
+                restarts with its identity and history preserved. Update a small
+                group first and this dashboard’s PC last.
               </p>
               <div className="grid gap-2">
-                <Label htmlFor="repo">Git remote</Label>
+                <Label htmlFor="release">Signed release manifest URL or cached release hash</Label>
                 <Input
-                  id="repo"
+                  id="release"
                   className="font-mono"
-                  value={repo}
-                  onChange={(e) => setRepo(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="branch">Branch</Label>
-                <Input
-                  id="branch"
-                  className="font-mono"
-                  value={branch}
-                  onChange={(e) => setBranch(e.target.value)}
+                  value={release}
+                  onChange={(e) => setRelease(e.target.value)}
                 />
               </div>
             </>
           ) : null}
 
+          <div className="mt-5 grid gap-3 border-t border-white/10 pt-4">
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={queueOffline} onChange={(e) => setQueueOffline(e.target.checked)} /><span>Queue for unavailable PCs</span></label>
+            <p className="text-xs text-muted-foreground">{queueOffline ? "Peers may deliver this command until it expires. The target checks expiry again before starting." : "Send to reachable PCs now. Historical records never trigger later execution."}</p>
+            {queueOffline ? <label className="grid gap-2 text-xs">Expires (UTC)<Input type="datetime-local" value={expiresAt.slice(0, 16)} onChange={(e) => setExpiresAt(`${e.target.value}:00.000Z`)} /></label> : null}
+          </div>
           </section>
           {error ? <p role="alert" className="action-error">{error}</p> : null}
           {currentJob ? <section className="action-results" aria-label="Action results"><p className="action-section-label">Results</p><JobResults job={currentJob} /></section> : null}

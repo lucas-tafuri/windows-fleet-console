@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link, { usePathname } from "@/components/navigation";
+import { MeshHealth } from "@/components/mesh-health";
 import { FolderKey, LayoutGrid, Monitor, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { JoinPrompt } from "@/components/join-prompt";
@@ -64,6 +64,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-h-full min-w-0 flex-1 flex-col pb-16 md:pb-0">
+        <MeshHealth />
         {children}
       </div>
 

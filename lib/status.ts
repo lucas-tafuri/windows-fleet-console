@@ -29,6 +29,6 @@ export const STATUS_LABEL: Record<MachineStatus, string> = {
   online: "Online",
   under_load: "Under load",
   frozen: "Frozen",
-  offline: "Offline",
+  offline: "Unreachable",
   limited: "Limited",
 };

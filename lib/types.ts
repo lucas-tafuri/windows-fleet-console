@@ -5,7 +5,7 @@ export type MachineStatus =
   | "offline"
   | "limited";
 
-export type Transport = "ws" | "poll" | "demo";
+export type Transport = "ws" | "poll" | "demo" | "mesh";
 
 export type MappedDrive = {
   letter: string;
@@ -40,9 +40,11 @@ export type JobKind =
   | "launch"
   | "self_update";
 
-export type JobResultStatus = "queued" | "running" | "ok" | "error";
+export type JobResultStatus = "queued" | "running" | "ok" | "error" | "unknown" | "expired" | "unavailable" | "acceptance_unknown" | "held";
 
 export type JobResult = {
+  commandId?: string;
+  replicaCount?: number;
   machineId: string;
   hostname: string;
   status: JobResultStatus;
@@ -54,6 +56,7 @@ export type JobResult = {
 };
 
 export type JobPayload = {
+  release?: string;
   package?: string;
   match?: string;
   letter?: string;
@@ -67,6 +70,11 @@ export type JobPayload = {
 };
 
 export type Job = {
+  delivery?: string;
+  expiresAt?: number;
+  retryOf?: string;
+  replicaCount?: number;
+  historical?: boolean;
   id: string;
   kind: JobKind;
   createdAt: number;
@@ -138,6 +146,8 @@ export type MachineView = Machine & {
 export type JoinStatus = "pending" | "approved" | "denied";
 
 export type JoinRequest = {
+  fingerprint?: string;
+  legacyId?: string;
   id: string;
   hostname: string;
   user: string;
@@ -157,6 +167,12 @@ export type MapPrefs = {
 };
 
 export type FleetSnapshot = {
+  nodeId?: string;
+  fleetId?: string;
+  peers?: import("./mesh-contracts").PeerState[];
+  clockUncertain?: boolean;
+  removed?: boolean;
+  duplicateIdentity?: boolean;
   machines: MachineView[];
   jobs: Job[];
   software: CatalogApp[];

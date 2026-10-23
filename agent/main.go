@@ -14,6 +14,13 @@ var background bool
 var installOnly bool
 
 func main() {
+	if isMeshInvocation(os.Args) {
+		if err := meshMain(os.Args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "fleet mesh:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	sessionJob := flag.String("session-job", "", "Run one job in the signed-in user's session")
 	trayOnly := flag.Bool("tray-only", false, "Show a tray icon for the installed background agent")
 	waitForInstance := flag.Bool("wait-for-instance", false, "Wait for the installing parent to exit")

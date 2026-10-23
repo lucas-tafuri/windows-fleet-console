@@ -1,12 +1,17 @@
 {
   "name": "prettydamnfleet",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "node server.mjs",
-    "dev:next": "next dev -H 0.0.0.0 -p 43123",
-    "build": "next build",
-    "start": "NODE_ENV=production node server.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.web.json",
+    "contracts": "node scripts/mesh.mjs contracts",
+    "test:mesh": "node scripts/mesh.mjs test",
+    "build:node": "npm run build && node scripts/mesh.mjs build",
+    "legacy:dev": "node server.mjs",
+    "legacy:build": "next build",
     "lint": "eslint",
     "build:agent": "bash scripts/build-agent.sh"
   },
@@ -29,9 +34,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.2.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^7.3.7"
   }
 }

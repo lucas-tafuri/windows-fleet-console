@@ -1,0 +1,36 @@
+name: Mesh validation
+on: [push, pull_request]
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - run: npm ci
+      - run: npm run contracts
+      - run: git diff --exit-code -- lib/mesh-contracts.ts
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:mesh
+      - name: Fifty-node failure and convergence harness
+        working-directory: agent
+        env:
+          FLEET_SCALE_TEST: '1'
+        run: go test ./mesh -run TestFiftyNodesTenMiBConvergence -v -count=1 -timeout 180s
+      - name: Validate installer without changing services
+        run: node --test tests/mesh-installer.test.mjs
+      - run: npm run build:node
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fleet-mesh-windows-x64
+          path: |
+            dist/fleet-node.exe
+            dist/install-mesh.ps1
+            dist/install-mesh.cmd

@@ -15,7 +15,7 @@ import {
   Trash2,
   Unplug,
 } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ActionSheet, type ActionKey } from "@/components/action-sheet";
@@ -32,7 +32,7 @@ const FILTERS: Array<{ id: "all" | MachineStatus; label: string }> = [
   { id: "online", label: "Online" },
   { id: "under_load", label: "Load" },
   { id: "frozen", label: "Frozen" },
-  { id: "offline", label: "Offline" },
+  { id: "offline", label: "Unreachable" },
   { id: "limited", label: "Limited" },
 ];
 
@@ -93,8 +93,8 @@ export function FleetView() {
     );
   }
 
-  async function onSubmit(kind: Parameters<typeof submitJob>[0], payload: Parameters<typeof submitJob>[2]) {
-    const job = await submitJob(kind, selected, payload);
+  async function onSubmit(kind: Parameters<typeof submitJob>[0], payload: Parameters<typeof submitJob>[2], options?: Parameters<typeof submitJob>[3]) {
+    const job = await submitJob(kind, selected, payload, options);
     setLastJob(job);
   }
 
@@ -109,9 +109,7 @@ export function FleetView() {
         ) : null}
         {data.unprotected ? (
           <div className="border-b border-white/8 bg-white/3 px-4 py-1.5 text-center text-[11px] text-muted-foreground md:text-left">
-            Dashboard PIN is unset — this console is open on the local network.
-            Set <span className="font-mono text-foreground/80">DASHBOARD_PIN</span> to
-            lock it.
+            Open on your local network · Commands run only after the target PC accepts them.
           </div>
         ) : null}
 

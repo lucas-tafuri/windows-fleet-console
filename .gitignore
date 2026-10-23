@@ -51,3 +51,15 @@ next-env.d.ts
 !/dist/install.cmd
 !/dist/install-host.ps1
 !/dist/open-install-log.cmd
+!/dist/install-mesh.ps1
+!/dist/install-mesh.cmd
+
+# Reproducible mesh build output and local databases/keys
+/agent/ui/dist/*
+!/agent/ui/dist/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+identity.dat
+release-private.key
+/artifacts/

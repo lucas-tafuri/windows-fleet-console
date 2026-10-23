@@ -21,8 +21,8 @@ export function JoinPrompt() {
         <DialogHeader>
           <DialogTitle>Allow this PC to join PrettyDamnFleet?</DialogTitle>
           <DialogDescription>
-            A client found this console on the LAN and is waiting. Approve only
-            machines you own.
+            A new peer is waiting. Compare its fingerprint with the installer,
+            then approve this machine to join the fleet.
           </DialogDescription>
         </DialogHeader>
         {join ? (
@@ -31,6 +31,8 @@ export function JoinPrompt() {
             <Row label="User" value={join.user || "—"} />
             <Row label="OS" value={join.os || "Windows"} />
             <Row label="IP" value={join.ip || "unknown"} />
+            <Row label="Fingerprint" value={join.fingerprint || join.id} />
+            {join.legacyId ? <Row label="Legacy ID" value={join.legacyId} /> : null}
             {(data.pendingJoins || []).length > 1 ? (
               <Row
                 label="Queue"
@@ -63,7 +65,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="truncate text-foreground">{value}</dd>
+      <dd className="break-all text-right text-foreground" title={value}>{value}</dd>
     </div>
   );
 }

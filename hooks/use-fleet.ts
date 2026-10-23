@@ -1,234 +1,77 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { CatalogApp, FleetSnapshot, Job, JobKind, JobPayload, MapPrefs } from "@/lib/types";
-
-const EMPTY_MAP: MapPrefs = {
-  letter: "Z",
-  unc: "",
-  username: "",
-  password: "",
-  uncHistory: [],
-};
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import type { CatalogApp, FleetSnapshot, Job, JobKind, JobPayload } from "@/lib/types";
 
 const EMPTY: FleetSnapshot = {
-  machines: [],
-  jobs: [],
-  software: [],
-  softwareStatus: {},
-  pendingJoins: [],
-  mapPrefs: EMPTY_MAP,
-  demoActive: false,
-  pinRequired: false,
-  unlocked: true,
-  unprotected: true,
-  serverTime: Date.now(),
+  machines: [], jobs: [], software: [], softwareStatus: {}, pendingJoins: [],
+  mapPrefs: { letter: "Z", unc: "", username: "", password: "", uncHistory: [] },
+  demoActive: false, pinRequired: false, unlocked: true, unprotected: true, serverTime: 0,
 };
+let state = { data: EMPTY, loading: true, error: null as string | null, transport: "poll" as "sse" | "poll" };
+const listeners = new Set<() => void>();
+let stream: EventSource | undefined;
+let timer: ReturnType<typeof setInterval> | undefined;
+let pulling = false;
+function publish(next: typeof state) { state = next; listeners.forEach((fn) => fn()); }
+function accept(data: FleetSnapshot, transport: "sse" | "poll") {
+  publish({ data, transport, loading: false, error: null });
+  try { localStorage.setItem("fleet-peer-links", JSON.stringify((data.peers || []).map((p) => ({ name: p.member.hostname, url: p.member.dashboardUrl })))); } catch { /* storage optional */ }
+}
+async function pull() {
+  if (pulling) return;
+  pulling = true;
+  try {
+    const response = await fetch("/api/v2/fleet", { cache: "no-store", signal: AbortSignal.timeout(8_000) });
+    if (!response.ok) throw new Error("This node is unavailable");
+    accept(await response.json() as FleetSnapshot, "poll");
+  } catch { publish({ ...state, loading: false, error: "Cannot reach this node. Open another peer below." }); }
+  finally { pulling = false; }
+}
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  if (listeners.size === 1) {
+    void pull();
+    stream = new EventSource("/api/v2/events");
+    stream.onmessage = (event) => { try { accept(JSON.parse(event.data) as FleetSnapshot, "sse"); } catch { void pull(); } };
+    stream.onerror = () => { publish({ ...state, transport: "poll" }); void pull(); };
+    timer = setInterval(() => { if (stream?.readyState !== EventSource.OPEN) void pull(); }, 2_000);
+  }
+  return () => { listeners.delete(listener); if (!listeners.size) { stream?.close(); stream = undefined; clearInterval(timer); timer = undefined; } };
+}
+export function submissionID() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (v) => v.toString(16).padStart(2, "0")).join("");
+}
+export async function fleetRequest<T>(path: string, body: unknown, method = "POST"): Promise<T> {
+  const response = await fetch(`/api/v2${path}`, { method, headers: { "Content-Type": "application/json", "X-Fleet-Request": "v2" }, body: JSON.stringify(body) });
+  const result = await response.json() as T & { error?: string };
+  if (!response.ok) throw new Error(result.error || "Request failed");
+  await pull();
+  return result;
+}
+export type DeliveryOptions = { delivery?: "online" | "queued"; expiresAt?: number; retryOf?: string };
 
 export function useFleet() {
-  const [data, setData] = useState<FleetSnapshot>(EMPTY);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [transport, setTransport] = useState<"ws" | "poll">("poll");
+  const snapshot = useSyncExternalStore(subscribe, () => state, () => state);
   const [busy, setBusy] = useState(false);
-  const wsTried = useRef(false);
-
-  const pull = useCallback(async () => {
-    try {
-      const res = await fetch("/api/fleet", { cache: "no-store" });
-      if (!res.ok) throw new Error(`Fleet ${res.status}`);
-      const json = (await res.json()) as FleetSnapshot;
-      setData({
-        ...json,
-        software: json.software || [],
-        softwareStatus: json.softwareStatus || {},
-        pendingJoins: json.pendingJoins || [],
-        mapPrefs: json.mapPrefs || EMPTY_MAP,
-      });
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Cannot reach console");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let closed = false;
-    let pollTimer: ReturnType<typeof setInterval> | undefined;
-    let ws: WebSocket | undefined;
-
-    const startPoll = () => {
-      if (pollTimer) return;
-      setTransport("poll");
-      void pull();
-      pollTimer = setInterval(() => void pull(), 2000);
-    };
-
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    try {
-      ws = new WebSocket(`${proto}//${window.location.host}/api/ui/ws`);
-      ws.onopen = () => {
-        wsTried.current = true;
-      };
-      ws.onmessage = (ev) => {
-        try {
-          const json = JSON.parse(String(ev.data)) as FleetSnapshot;
-          if (closed) return;
-          setData({
-            ...json,
-            software: json.software || [],
-            softwareStatus: json.softwareStatus || {},
-            pendingJoins: json.pendingJoins || [],
-            mapPrefs: json.mapPrefs || EMPTY_MAP,
-          });
-          setLoading(false);
-          setError(null);
-          setTransport("ws");
-          if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = undefined;
-          }
-        } catch {
-          /* ignore malformed frames */
-        }
-      };
-      ws.onerror = () => {
-        if (!closed) startPoll();
-      };
-      ws.onclose = () => {
-        if (!closed) startPoll();
-      };
-    } catch {
-      startPoll();
-    }
-
-    const fallback = setTimeout(() => {
-      if (!closed && transport !== "ws") startPoll();
-    }, 1200);
-
-    return () => {
-      closed = true;
-      clearTimeout(fallback);
-      if (pollTimer) clearInterval(pollTimer);
-      ws?.close();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pull]);
-
-  const unlock = useCallback(async (pin: string) => {
-    const res = await fetch("/api/pin", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
-    const json = (await res.json()) as { ok?: boolean; error?: string };
-    if (!res.ok || !json.ok) throw new Error(json.error || "Wrong PIN");
-    await pull();
-  }, [pull]);
-
-  const submitJob = useCallback(
-    async (kind: JobKind, machineIds: string[], payload: JobPayload = {}) => {
-      setBusy(true);
-      try {
-        const res = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ kind, machineIds, payload }),
-        });
-        const json = (await res.json()) as { job?: Job; error?: string };
-        if (!res.ok || !json.job) throw new Error(json.error || "Job failed");
-        await pull();
-        return json.job;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [pull]
-  );
-
-  const clearJobs = useCallback(async () => {
+  const pending = useRef<{ body: string; id: string } | null>(null);
+  const submitJob = useCallback(async (kind: JobKind, machineIds: string[], payload: JobPayload = {}, options: DeliveryOptions = {}) => {
+    const body = { kind, machineIds: [...machineIds].sort(), payload, delivery: options.delivery || "online", ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}), ...(options.retryOf ? { retryOf: options.retryOf } : {}) };
+    const serialized = JSON.stringify(body);
+    if (!pending.current || pending.current.body !== serialized) pending.current = { body: serialized, id: submissionID() };
     setBusy(true);
     try {
-      const res = await fetch("/api/jobs", { method: "DELETE" });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(json.error || "Could not clear jobs");
-      await pull();
-    } finally {
-      setBusy(false);
-    }
-  }, [pull]);
-
-  const addSoftware = useCallback(
-    async (input: { name: string; match?: string; wingetId?: string }) => {
-      setBusy(true);
-      try {
-        const res = await fetch("/api/software", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(input),
-        });
-        const json = (await res.json()) as { item?: CatalogApp; error?: string };
-        if (!res.ok || !json.item) throw new Error(json.error || "Could not add software");
-        await pull();
-        return json.item;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [pull]
-  );
-
-  const removeSoftware = useCallback(
-    async (id: string) => {
-      setBusy(true);
-      try {
-        const res = await fetch("/api/software", {
-          method: "DELETE",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id }),
-        });
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        if (!res.ok) throw new Error(json.error || "Could not remove software");
-        await pull();
-      } finally {
-        setBusy(false);
-      }
-    },
-    [pull]
-  );
-
-  const decideJoin = useCallback(
-    async (id: string, action: "approve" | "deny") => {
-      setBusy(true);
-      try {
-        const res = await fetch(`/api/join/${id}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action }),
-        });
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        if (!res.ok) throw new Error(json.error || "Could not update join");
-        await pull();
-      } finally {
-        setBusy(false);
-      }
-    },
-    [pull]
-  );
-
-  return {
-    data,
-    loading,
-    error,
-    transport,
-    busy,
-    pull,
-    unlock,
-    submitJob,
-    clearJobs,
-    addSoftware,
-    removeSoftware,
-    decideJoin,
+      const result = await fleetRequest<{ job: Job }>("/jobs", { ...body, submissionId: pending.current.id });
+      pending.current = null;
+      return result.job;
+    } finally { setBusy(false); }
+  }, []);
+  const mutate = useCallback(async <T,>(path: string, body: unknown, method?: string) => { setBusy(true); try { return await fleetRequest<T>(path, body, method); } finally { setBusy(false); } }, []);
+  return { ...snapshot, busy, pull, submitJob,
+    clearJobs: () => mutate("/jobs", {}, "DELETE"),
+    addSoftware: async (input: { name: string; match?: string; wingetId?: string }) => (await mutate<{ item: CatalogApp }>("/software", input)).item,
+    removeSoftware: (id: string) => mutate("/software", { id }, "DELETE"),
+    decideJoin: (id: string, action: "approve" | "deny") => mutate(`/join/${encodeURIComponent(id)}`, { action }),
   };
 }

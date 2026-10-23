@@ -1,104 +1,120 @@
-# PrettyDamnFleet
+# PrettyDamnFleet Mesh
 
-A lightweight control plane for Windows PCs you own. The web UI shows live status (online, under load, frozen, offline) and runs bulk jobs: install/uninstall/check software, map/unmap drives, clean Downloads, empty the Recycle Bin, and launch a program.
+A Windows fleet manager that runs on **every PC**. Each node serves the dashboard, stores fleet history, exchanges records with peers, and executes its own jobs. There is no permanent server or voting majority required for routine work.
 
-The dashboard is one Node process. Each PC runs a small Go agent that **phones home** (no inbound ports on the machines).
+- A surviving PC can manage itself and reachable peers.
+- Disconnected groups work independently and exchange history when reconnected.
+- Every PC has a local dashboard; phones and other LAN devices can open any peer.
+- Jobs execute only after the target commits acceptance. Replication alone never executes an immediate command.
+- Offline delivery is explicit and has an expiration time.
+- Interrupted side effects are marked **outcome unknown**, never silently repeated.
 
-**Public repo:** [github.com/lucas-tafuri/windows-fleet-console](https://github.com/lucas-tafuri/windows-fleet-console)
+Targets up to 50 Windows x64 PCs on one trusted LAN. Browser access is intentionally unlocked HTTP. Peer traffic uses mutually authenticated TLS with individual machine keys. Any person who can reach a dashboard can run commands and approve peers.
 
-## Run the console
+## Build
 
-On the machine that will host the dashboard (any OS with Node 20+):
-
-```bash
-git clone https://github.com/lucas-tafuri/windows-fleet-console.git
-cd windows-fleet-console
-./install.sh
-```
-
-That installs npm dependencies and starts the console on [http://127.0.0.1:43123](http://127.0.0.1:43123). Until a real agent connects, three simulated PCs are shown so every action can be tried.
-
-```bash
-npm run build
-npm start
-```
-
-The console must be reachable from your Windows PCs (LAN IP, VPN, or a VPS). Set `FLEET_PUBLIC_URL` to that address so Enroll copies the right command.
-
-Optional env (unset is fine — first run generates a fleet token and stays unlocked):
-
-| Variable | Purpose |
-|---|---|
-| `PORT` | Bind port (default `43123`) |
-| `HOST` | Bind address (default `0.0.0.0`) |
-| `FLEET_TOKEN` | Initial shared secret for a new installation |
-| `DASHBOARD_PIN` | Optional PIN gate for the web UI |
-| `FLEET_PUBLIC_URL` | Public URL printed on the Enroll page |
-| `FLEET_TLS` | Set `1` if the console is behind HTTPS |
-
-State lives in `data/fleet.json` (atomic writes, no database).
-
-## Enroll a Windows PC
-
-On each PC, run the install script **as administrator** (Git via winget if missing, agent download, boot registration, start). From the Enroll page copy the one-liner, or:
+Build prerequisites: Node 24 and Go 1.26 or newer. Installed PCs need neither Node nor Git.
 
 ```powershell
-iwr -UseBasicParsing https://raw.githubusercontent.com/lucas-tafuri/windows-fleet-console/main/dist/install.ps1 -OutFile install.ps1
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Server http://YOUR_CONSOLE:43123 -Token YOUR_TOKEN
+npm ci
+npm run contracts
+npm run typecheck
+npm run build:node
 ```
 
-`dist/install.cmd` sits next to `fleet-agent.exe` — double-click it and paste the server URL and token when asked.
+If Go is outside PATH, set `$env:GO` to its full path. The output is `dist/fleet-node.exe`, including the embedded React dashboard. `scripts/build-mesh.ps1` also runs the Go tests and accepts a release version.
 
-The agent is installed in `%ProgramData%\FleetConsole`. Its saved server URL, token, and machine identity survive restarts and binary updates. The installer migrates pairing from the old `%LOCALAPPDATA%\FleetConsole` installation when available. Reusing approval only applies to the saved server; explicitly choosing a different server requires its token or approval.
+Old host/agent source remains for reuse, regression tests, and migration. Legacy instructions are archived in [docs/legacy-server.md](docs/legacy-server.md). Do not use the old client updater to install a mesh release.
 
-On the **console machine**, run `dist\install-host.ps1` as administrator once. Both installers create Windows startup tasks running in the background before sign-in, with automatic recovery after failures. Clients retry the saved server indefinitely, so startup order does not matter. Keep the server address stable (DNS name or DHCP reservation).
+## Install the first PC
 
-The host keeps `data/fleet.json` in the installed repository; retain this directory when replacing or moving the application. `FLEET_DATA_DIR` can select another persistent location. The existing saved fleet token takes precedence over `FLEET_TOKEN`, which only seeds a new installation. An unreadable or corrupt state file now produces an error instead of silently resetting approvals.
+Copy `fleet-node.exe`, `install-mesh.ps1`, and `install-mesh.cmd` together. Run in elevated PowerShell:
 
-Boot tasks run as Local System so they can start before sign-in. Once someone signs in, software, drive mapping, Downloads cleanup, Recycle Bin, and launch jobs run through a temporary worker using that user's Windows session and profile. The local console session takes precedence; otherwise a single active Remote Desktop session is used. If no user is signed in, or multiple remote users make the target ambiguous, these jobs return a clear error. Pairing and monitoring continue without a signed-in user. Foreground hung-window detection is unavailable in the background session.
-
-The background agent starts before sign-in. The updated client installer also registers a separate tray icon for signed-in users; its Open manager action opens the dashboard, and hiding the icon leaves monitoring running. Protect the host installation directory from modification by untrusted users because its startup task runs with system privileges. Rerun the host installer after updating the checkout to refresh its installed launcher; it retains fleet data.
-
-### Updating existing installations
-
-Rerun `dist\install.ps1` as administrator on clients to remove legacy Startup-folder launchers across user profiles and consolidate startup into the boot task. The resident agent takes a machine-wide lock before setup or pairing changes. A second launch exits; a relocated copy waits for its installing parent to finish. Temporary desktop jobs appear as `fleet-session-worker.exe`, separately from the single resident `fleet-agent.exe`.
-
-Update the checkout on the console machine and rerun `dist\install-host.ps1` as administrator to install the current dashboard. The host installer and host Update action rebuild the production UI before restarting. Updating only the clients does not update the console's pages. Refresh the browser after updating the host.
-
-### GPU usage
-
-Fleet rows and mobile cards include a GPU meter. It reports the busiest GPU engine across adapters, summing processes sharing that engine and clamping to 0�100%. Unsupported drivers, missing counters, and failed samples display **�**, not a fabricated zero. Sampling runs independently of heartbeats.
-
-### Update every PC
-
-In the console, select machines and click **Update**. Each agent `git pull`s [this repo](https://github.com/lucas-tafuri/windows-fleet-console) (or clones it / downloads `dist/fleet-agent.exe` if Git is missing), replaces the binary, and restarts.
-
-To rebuild the agent yourself (Go on any OS):
-
-```bash
-npm run build:agent
+```powershell
+.\install-mesh.ps1 -Mode Create
 ```
 
-## Fallbacks
+The installer creates the `PrettyDamnFleetMesh` Windows service and a separate user tray task. Open **http://127.0.0.1:43123**. Other LAN devices use that PC's LAN address and port `43123`.
 
-| Area | Preferred | Then |
-|---|---|---|
-| Agent transport | WebSocket `/api/agent/ws` | HTTP poll `POST /api/agent/poll` |
-| Browser live updates | WebSocket `/api/ui/ws` | REST poll every 2s |
-| Software | winget | Uninstall registry / Get-Package (detect). Install/uninstall require winget |
-| Drives | `net use` | `WNetAddConnection2` / `WNetCancelConnection2` |
-| Recycle Bin | `SHEmptyRecycleBin` | Shell.Application / `Clear-RecycleBin` |
-| Launch | `ShellExecute` | `cmd /c start`, PATH and Program Files search |
-| Status | CPU + RAM + hung windows | Memory only, or **Limited** if counters fail. Frozen is never inferred from high CPU alone |
+Create is explicit and one-time. Failed discovery never creates another fleet.
 
-## Status rules
+## Join other PCs
 
-- **Offline** — no heartbeat for 20 seconds
-- **Frozen** — agent alive and an interactive window is hung
-- **Under load** — CPU ≥ 85% or memory ≥ 90%
-- **Limited** — connected, but metrics APIs failed
-- **Online** — none of the above
+Open **Enroll** on an existing peer. Copy its installer command, including peer address, peer fingerprint, and fleet fingerprint. Run as administrator on the new PC, compare its fingerprint with the approval prompt, and approve it.
 
-## What this is not
+Each PC installs the same executable. Once records replicate, the first PC can shut down without disabling the others. Saved addresses survive restarts; discovery learns changed addresses only after an authenticated probe.
 
-Not remote desktop, not a file manager, not a stealth implant. The agent is a named process plus an optional scheduled task, for machines you enroll yourself.
+Installer firewall rules allow these ports only on the local subnet, on Private/Domain profiles:
+
+- TCP `43123`: browser dashboard and `/api/v2`.
+- TCP `43125`: authenticated peer protocol.
+- UDP `43124`: discovery using actual interface subnet masks.
+
+If discovery is blocked, joining through an explicit peer still works. Keep one saved peer address reachable until discovery can refresh changed addresses.
+
+## Run work
+
+Select PCs and use software, drive, cleanup, launch, or update actions. Default commands attempt live delivery. Enable **Queue for unavailable PCs** to permit later delivery, with a default 24-hour deadline.
+
+The target journals acceptance, start, and result separately. A lost acknowledgment is resolved using the original execution ID. If a PC crashes during a side effect, inspect it before choosing **Review and retry**; retry creates a new linked execution.
+
+Desktop work still runs in the signed-in user's Windows session. Before sign-in, or with ambiguous remote sessions, these jobs return an explicit session error. Monitoring, synchronization, and existing per-user drive maintenance remain independent.
+
+**Unreachable** means unreachable from this dashboard's node, not proof that a PC is off. Cached observations remain stale. A local record is not a backup: additional acknowledged copies are shown separately from current peer reachability.
+
+## Migrate
+
+Follow the [maintenance cutover procedure](docs/mesh-cutover.md). Import preserves historical inventory, catalog, software observations, and outcomes. It excludes demo PCs and credentials and never replays old queued/running work.
+
+```powershell
+.\install-mesh.ps1 -Mode Create -LegacyData 'C:\old-console\data\fleet.json'
+```
+
+Other PCs join the new fleet. Saved legacy machine IDs become aliases when available. The installer backs up/disables old startup tasks and launchers before enabling the mesh. Per-user managed-drive credentials remain in their original profiles.
+
+## Backup and recovery
+
+State is in `%ProgramData%\FleetConsole\mesh`. Protect this directory. Stop the service before maintenance CLI commands so one process owns the identity:
+
+```powershell
+Stop-Service PrettyDamnFleetMesh
+& "$env:ProgramData\FleetConsole\fleet-node.exe" backup --output 'D:\protected-backups\fleet.db'
+Start-Service PrettyDamnFleetMesh
+```
+
+Backups use SQLite's consistent snapshot mechanism. Never copy a live database without its WAL, synchronize it through a shared folder, or clone an identity onto another PC.
+
+Restore into a new, empty directory:
+
+```powershell
+.\fleet-node.exe restore --input 'D:\protected-backups\fleet.db' --data-dir 'C:\FleetRecovery'
+```
+
+Restore validates signatures and creates a **new identity**, with no executable inbox restored. Join it through a surviving peer before issuing commands. If every node is lost, keep restored history as an archive and explicitly create a replacement fleet; there is no automatic trust reset or revival of an old execution writer.
+
+## Signed updates
+
+Install a base64 Ed25519 publisher public key using `-ReleasePublicKey`. Without one, normal work remains available and self-update returns a clear error.
+
+See [release publishing and recovery](docs/mesh-updates.md). Signed manifests identify the exact binary, checksum, size, protocol range, and increasing release number. Peers can relay cached releases; targets verify independently. A separate helper replaces the binary, checks service health, and restores the old executable on failure.
+
+Update a small group first, confirm final receipts, then continue. Update your current dashboard's PC last. Staging is never presented as successful installation.
+
+## Verification
+
+```powershell
+npm run test:mesh
+node --test tests/mesh-installer.test.mjs tests/store.test.mjs tests/store-recovery.test.mjs tests/software.test.mjs
+$env:FLEET_SCALE_TEST='1'
+Push-Location agent
+go test ./mesh -run TestFiftyNodesTenMiBConvergence -v -count=1 -timeout 180s
+Pop-Location
+```
+
+Tests use isolated databases, actual local TLS connections, and fake executors. They cover partitions, founder loss, single survivors, lost acknowledgments, replay prevention, crash boundaries, expiry, import, corruption, signing, and rollback callbacks. They do not stop real services or execute cleanup jobs.
+
+The 50-node test transfers a 10 MiB backlog after founder loss with a 60-second convergence budget. Real boot-before-sign-in, session selection, LAN firewall behavior, and three-PC cutover require the Windows rehearsal checklist.
+
+See [validation results and remaining release gates](docs/mesh-validation.md) for the checks actually performed and the limits of the local harness.
+
+For frontend development, build/start a node and run `npm run dev`; Vite proxies `/api` to it. `lib/mesh-contracts.ts` is generated from Go. See [protocol and consistency](docs/mesh-protocol.md) for guarantees and limits.

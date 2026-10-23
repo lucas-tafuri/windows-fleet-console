@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "plugins": [], "incremental": false, "target": "ES2022" },
+  "include": ["web/**/*.tsx", "components/**/*.tsx", "hooks/**/*.ts", "lib/types.ts", "lib/mesh-contracts.ts", "app/software/page.tsx", "app/jobs/page.tsx", "app/enroll/page.tsx", "vite.config.ts"],
+  "exclude": ["node_modules", ".next", "agent", "lib/hub.ts", "lib/store.ts"]
+}

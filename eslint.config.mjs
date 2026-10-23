@@ -12,7 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "agent/ui/dist/**",
   ]),
+  { files: ["web/**", "components/navigation.tsx", "components/mesh-health.tsx", "app/enroll/page.tsx"], rules: { "@next/next/no-html-link-for-pages": "off" } },
 ]);
 
 export default eslintConfig;
