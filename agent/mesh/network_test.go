@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -228,7 +229,15 @@ func TestFiftyNodesTenMiBConvergence(t *testing.T) {
 		}
 	}
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	budget := 60 * time.Second
+	if configured := os.Getenv("FLEET_SCALE_BUDGET_SECONDS"); configured != "" {
+		seconds, err := strconv.Atoi(configured)
+		if err != nil || seconds < 1 || seconds > 240 {
+			t.Fatal("invalid scale-test budget")
+		}
+		budget = time.Duration(seconds) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 	slots := make(chan struct{}, 8)
 	var wg sync.WaitGroup
@@ -258,8 +267,10 @@ func TestFiftyNodesTenMiBConvergence(t *testing.T) {
 			t.Errorf("node failed to converge")
 		}
 	}
-	t.Logf("49 surviving nodes converged 10 MiB after founder loss in %s", time.Since(start))
-	if time.Since(start) > 60*time.Second {
+	if !t.Failed() {
+		t.Logf("49 surviving nodes converged 10 MiB after founder loss in %s (budget %s)", time.Since(start), budget)
+	}
+	if time.Since(start) > budget {
 		t.Fatal("convergence budget exceeded")
 	}
 }

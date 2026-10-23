@@ -22,3 +22,7 @@ Complete and record the [three-PC maintenance rehearsal](mesh-cutover.md), inclu
 Also exercise real disk exhaustion and process termination at journal boundaries, restored disk images/duplicate identities, interrupted installation, and representative 50-PC LAN traffic. The automated write-failure test uses SQLite write rejection; it is not a physical disk-full test. The 20-second unreachable threshold is implemented, but a real-LAN failure-indication timing measurement remains outstanding.
 
 The installer is supplied and parsed, not executed as part of this validation. Signed release keys must be configured for deployment; no production publisher private key is included. Commands must remain paused until migration counts, aliases, replicated history, and rollback checks pass.
+
+## Hosted CI capacity
+
+The first GitHub-hosted Windows run passed the ordinary tests but exceeded the scale harness's 60-second deadline while running all 50 nodes on one VM. CI now uses an explicit 180-second correctness budget (`FLEET_SCALE_BUDGET_SECONDS`), reports actual elapsed time, and retains the default 60-second performance gate for deployment rehearsal. A green hosted run does not certify the LAN performance target.

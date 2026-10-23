@@ -23,7 +23,10 @@ jobs:
         working-directory: agent
         env:
           FLEET_SCALE_TEST: '1'
-        run: go test ./mesh -run TestFiftyNodesTenMiBConvergence -v -count=1 -timeout 180s
+          # All 50 nodes share one hosted VM. Keep correctness here; the default
+          # 60-second performance gate remains required on rehearsal hardware.
+          FLEET_SCALE_BUDGET_SECONDS: '180'
+        run: go test ./mesh -run TestFiftyNodesTenMiBConvergence -v -count=1 -timeout 240s
       - name: Validate installer without changing services
         run: node --test tests/mesh-installer.test.mjs
       - run: npm run build:node
