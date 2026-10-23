@@ -132,6 +132,10 @@ func (n *Node) Snapshot() (Snapshot, error) {
 		row["transport"] = "mesh"
 		row["dashboardUrl"] = m.DashboardURL
 		row["legacyId"] = m.LegacyID
+		row["kinds"] = state.Kinds
+		if m.ID == n.Self.ID {
+			row["kinds"] = Kinds
+		}
 		status := "online"
 		label := "just now"
 		if nowMS()-last > 20000 {

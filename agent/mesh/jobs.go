@@ -29,6 +29,9 @@ func (s *Store) CreateCommands(req SubmitRequest) ([]Event, error) {
 	if req.Payload == nil {
 		req.Payload = map[string]string{}
 	}
+	if req.Kind == "diagnostics" && (len(req.Payload) != 1 || !validDiagnostic(req.Payload["profile"])) {
+		return nil, errors.New("choose a supported diagnostic profile; extra parameters are not allowed")
+	}
 	if len(encode(req)) > 128*1024 {
 		return nil, errors.New("command exceeds limit")
 	}
@@ -197,6 +200,8 @@ func (s *Store) Accept(id string, clockUncertain bool) (Receipt, error) {
 		status, message := "queued", "Accepted durably by target"
 		if !validKind(c.Kind) {
 			status, message = "error", "This node version does not support the command"
+		} else if c.Kind == "diagnostics" && (len(c.Payload) != 1 || !validDiagnostic(c.Payload["profile"]) || len(c.Secret) != 0) {
+			status, message = "error", "Invalid diagnostic profile or parameters"
 		} else if c.Delivery == "queued" && clockUncertain {
 			status, message = "held", "Clock uncertain; waiting for trustworthy time"
 		} else if c.Delivery == "queued" && c.ExpiresAt <= nowMS() {
@@ -238,7 +243,7 @@ func (s *Store) RecoverExcept(pendingUpdate string) error {
 				return err
 			}
 			status, message := "unknown", "Interrupted during execution; inspect the machine before an explicit retry"
-			if c.Kind == "check" {
+			if c.Kind == "check" || c.Kind == "diagnostics" {
 				status, message = "queued", "Retrying interrupted read-only check"
 			}
 			if _, err = s.receiptTx(tx, c, status, message, nil); err != nil {

@@ -30,6 +30,7 @@ export type Machine = {
 };
 
 export type JobKind =
+  | "diagnostics"
   | "install"
   | "uninstall"
   | "check"
@@ -56,6 +57,7 @@ export type JobResult = {
 };
 
 export type JobPayload = {
+  profile?: string;
   release?: string;
   package?: string;
   match?: string;
@@ -139,6 +141,10 @@ export type SoftwareInstall = {
 export type SoftwareStatusMap = Record<string, Record<string, SoftwareInstall>>;
 
 export type MachineView = Machine & {
+  dashboardUrl?: string;
+  legacyId?: string;
+  stale?: boolean;
+  kinds?: string[];
   status: MachineStatus;
   lastSeenLabel: string;
 };

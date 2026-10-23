@@ -2,13 +2,14 @@
 
 import Link, { usePathname } from "@/components/navigation";
 import { MeshHealth } from "@/components/mesh-health";
-import { FolderKey, LayoutGrid, Monitor, Package } from "lucide-react";
+import { FolderKey, LayoutGrid, Monitor, Package, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { JoinPrompt } from "@/components/join-prompt";
 
 const NAV = [
   { href: "/", label: "Fleet", icon: Monitor },
   { href: "/software", label: "Software", icon: Package },
+  { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/jobs", label: "Jobs", icon: LayoutGrid },
   { href: "/enroll", label: "Enroll", icon: FolderKey },
 ];

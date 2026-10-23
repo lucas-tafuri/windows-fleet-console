@@ -105,6 +105,12 @@ foreach ($profile in Get-CimInstance Win32_UserProfile | Where-Object { !$_.Spec
 }
 @{ tasks=$oldTasks; launchers=$startupBackups; legacyData=$LegacyData } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $backupDir 'cutover.json') -Encoding UTF8
 try {
+  # The tray shares the service executable and would otherwise lock replacement.
+  Stop-ScheduledTask -TaskName 'PrettyDamnFleet Mesh Tray' -ErrorAction SilentlyContinue
+  Get-CimInstance Win32_Process | Where-Object {
+    $_.ExecutablePath -and [String]::Equals($_.ExecutablePath, $binary, [StringComparison]::OrdinalIgnoreCase) -and
+    $_.CommandLine -match '(?:^|\s)tray(?:\s|$)'
+  } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop }
   if (![String]::Equals($sourceFile, $binary, [StringComparison]::OrdinalIgnoreCase)) { Copy-Item -LiteralPath $sourceFile -Destination $binary -Force }
   $common = @('--data-dir', $nodeData, '--ui-port', "$UiPort", '--peer-port', "$PeerPort", '--discovery-port', "$DiscoveryPort")
   if ($Advertise) { $common += @('--advertise', $Advertise) }
@@ -142,6 +148,7 @@ try {
   Stop-Service -Name $serviceName -ErrorAction SilentlyContinue
   $previous = Join-Path $backupDir 'fleet-node.exe'
   if (Test-Path -LiteralPath $previous) { Copy-Item -LiteralPath $previous -Destination $binary -Force; if ($wasRunning) { Start-Service -Name $serviceName -ErrorAction SilentlyContinue } }
+  Start-ScheduledTask -TaskName 'PrettyDamnFleet Mesh Tray' -ErrorAction SilentlyContinue
   Write-Host ('Installation did not finish. Backups and enrollment are retained at ' + $backupDir)
   Write-Host 'Legacy dispatch remains disabled. Reconcile jobs before manually restoring legacy tasks.'
   throw $failure

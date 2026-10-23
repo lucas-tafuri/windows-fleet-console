@@ -15,7 +15,15 @@ const MaxOutput = 64 * 1024
 const MaxBatch = 128
 const MaxBody = 2 * 1024 * 1024
 
-var Kinds = []string{"check", "install", "uninstall", "map_drive", "unmap_drive", "clean_downloads", "empty_recycle", "launch", "self_update"}
+var Kinds = []string{"check", "install", "uninstall", "map_drive", "unmap_drive", "clean_downloads", "empty_recycle", "launch", "self_update", "diagnostics"}
+
+func validDiagnostic(profile string) bool {
+	switch profile {
+	case "system", "disks", "network", "processes", "services", "events":
+		return true
+	}
+	return false
+}
 
 type Member struct {
 	ID            string `json:"id"`

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -212,6 +213,11 @@ func productName() string {
 	name, _, err := k.GetStringValue("ProductName")
 	if err != nil || name == "" {
 		return "Windows"
+	}
+	// Windows 11 retains the Windows 10 registry product name on some PCs.
+	build, _, _ := k.GetStringValue("CurrentBuildNumber")
+	if number, _ := strconv.Atoi(build); number >= 22000 && strings.HasPrefix(name, "Windows 10 ") {
+		name = strings.Replace(name, "Windows 10 ", "Windows 11 ", 1)
 	}
 	return name
 }

@@ -27,6 +27,8 @@ func runJob(job AssignedJob) JobResult {
 	args := payloadString(job.Payload, "args")
 
 	switch job.Kind {
+	case "diagnostics":
+		return diagnosticReport(job.ID, payloadString(job.Payload, "profile"))
 	case "maintain_drives":
 		return maintainDrives(job.ID)
 	case "check":

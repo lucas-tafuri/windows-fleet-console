@@ -54,6 +54,12 @@ If discovery is blocked, joining through an explicit peer still works. Keep one 
 
 ## Run work
 
+The fleet overview opens in a compact list with a remembered card-view option. Open a machine's **Details** for its session, resource usage, mapped drives, synchronization, dashboard link and recent activity. Historical machines are available under **Include history** and cannot be selected for new work.
+
+**Tools** collects read-only system, disk, network, process, service and Windows-error reports from reachable, compatible nodes. Reports run in the service context even before sign-in, have a 45-second timeout, and are bounded below the 64 KiB result limit. Process reports list the 40 largest working sets (CPU is lifetime seconds); service reports list up to 100 running/automatic services; error reports list up to 20 errors from the past day. They do not execute browser-provided scripts or store SSH credentials. Reports support filtering and JSON downloads, and interrupted read-only collection can resume safely.
+
+**Jobs** supports search, machine/status filters, expandable results, and result export. Reports and exports can contain internal machine details and Windows event text; dashboard access remains the same intentionally unlocked LAN access described above.
+
 Select PCs and use software, drive, cleanup, launch, or update actions. Default commands attempt live delivery. Enable **Queue for unavailable PCs** to permit later delivery, with a default 24-hour deadline.
 
 The target journals acceptance, start, and result separately. A lost acknowledgment is resolved using the original execution ID. If a PC crashes during a side effect, inspect it before choosing **Review and retry**; retry creates a new linked execution.

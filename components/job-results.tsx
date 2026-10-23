@@ -5,6 +5,7 @@ import { JOB_LABEL } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
 import { fleetRequest, submissionID } from "@/hooks/use-fleet";
+import { DiagnosticReport } from "@/components/diagnostic-report";
 
 export function JobResults({ job }: { job: Job }) {
   const rows = Object.values(job.results);
@@ -56,7 +57,7 @@ export function JobResults({ job }: { job: Job }) {
                 via {row.via}
               </p>
             ) : null}
-            {row.output ? (
+            {row.output && job.kind === "diagnostics" && row.status === "ok" ? <DiagnosticReport output={row.output} hostname={row.hostname} /> : row.output ? (
               <details className="job-log mt-3">
                 <summary className="cursor-pointer text-[11px] text-muted-foreground">View output</summary>
                 <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-black/20 p-3 font-mono text-[10px] leading-relaxed text-foreground/70">{row.output}</pre>

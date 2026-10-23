@@ -1,6 +1,7 @@
 import type { JobKind } from "./types";
 
 export const JOB_LABEL: Record<JobKind, string> = {
+  diagnostics: "Diagnostic report",
   install: "Install",
   uninstall: "Uninstall",
   check: "Check installed",

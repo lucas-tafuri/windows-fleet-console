@@ -21,7 +21,7 @@ func Handler() http.Handler {
 			return
 		}
 		clean := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-		if clean == "" || clean == "." || clean == "software" || clean == "jobs" || clean == "enroll" {
+		if clean == "" || clean == "." || clean == "software" || clean == "jobs" || clean == "enroll" || clean == "tools" {
 			body, err := fs.ReadFile(root, "index.html")
 			if err != nil {
 				http.Error(w, "Dashboard assets unavailable", 500)
