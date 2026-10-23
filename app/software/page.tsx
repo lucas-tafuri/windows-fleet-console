@@ -22,11 +22,21 @@ export default function SoftwarePage() {
     addSoftware,
     removeSoftware,
   } = useFleet();
+  const machines = data.machines.filter((m) => m.transport === "mesh" && !m.historical);
   const [selected, setSelected] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [wingetId, setWingetId] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [lastJob, setLastJob] = useState<Job | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [checkingCatalog, setCheckingCatalog] = useState(false);
+  const working = busy || checkingCatalog;
+
+  async function runAction(action: () => Promise<unknown>) {
+    setActionError("");
+    try { await action(); }
+    catch (e) { setActionError(e instanceof Error ? e.message : "The request failed"); }
+  }
 
   const liveJob = useMemo(() => {
     if (lastJob) return data.jobs.find((j) => j.id === lastJob.id) || lastJob;
@@ -34,11 +44,11 @@ export default function SoftwarePage() {
   }, [data.jobs, lastJob]);
 
   const allSelected =
-    data.machines.length > 0 &&
-    data.machines.every((m) => selected.includes(m.id));
+    machines.length > 0 &&
+    machines.every((m) => selected.includes(m.id));
 
   function toggleAll(next: boolean) {
-    setSelected(next ? data.machines.map((m) => m.id) : []);
+    setSelected(next ? machines.map((m) => m.id) : []);
   }
 
   function toggleOne(id: string, next: boolean) {
@@ -74,6 +84,8 @@ export default function SoftwarePage() {
 
   async function checkCatalog() {
     if (selected.length === 0) return;
+    setCheckingCatalog(true);
+    try {
     let job: Job | null = null;
     for (const item of data.software) {
       job = await submitJob("check", selected, {
@@ -81,6 +93,7 @@ export default function SoftwarePage() {
       });
     }
     if (job) setLastJob(job);
+    } finally { setCheckingCatalog(false); }
   }
 
   return (
@@ -133,13 +146,15 @@ export default function SoftwarePage() {
           {selected.length} selected
         </span>
         <Button
-          disabled={busy || selected.length === 0 || data.software.length === 0}
-          onClick={() => void checkCatalog()}
+          disabled={working || selected.length === 0 || data.software.length === 0}
+          onClick={() => void runAction(checkCatalog)}
         >
-          Check catalog
+          {checkingCatalog ? "Checking catalog…" : "Check catalog"}
         </Button>
-        <span className="ml-auto text-sm text-slate-300">{data.machines.length} clients · {data.software.length} titles</span>
+        <span className="ml-auto text-sm text-slate-300">{machines.length} clients · {data.software.length} titles</span>
       </div>
+
+      {actionError && <p role="alert" className="mt-3 text-sm text-destructive">{actionError}</p>}
 
       {loading ? (
         <p className="mt-6 text-sm text-muted-foreground">Loading catalog…</p>
@@ -166,8 +181,8 @@ export default function SoftwarePage() {
                       <button
                         type="button"
                         className="w-fit rounded py-1 text-xs font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary disabled:text-slate-400"
-                        disabled={busy || selected.length === 0}
-                        onClick={() => void checkApp(item.id)}
+                        disabled={working || selected.length === 0}
+                        onClick={() => void runAction(() => checkApp(item.id))}
                       >
                         Check
                       </button>
@@ -177,7 +192,7 @@ export default function SoftwarePage() {
               </tr>
             </thead>
             <tbody>
-              {data.machines.map((m) => (
+              {machines.map((m) => (
                 <tr key={m.id} className={cn(selected.includes(m.id) ? "bg-[#28271e]" : "odd:bg-[#191c20] even:bg-[#1e2227]")}>
                   <td className="sticky left-0 z-10 border-b border-white/10 bg-inherit px-4 py-5 align-top">
                     <Checkbox
@@ -201,7 +216,7 @@ export default function SoftwarePage() {
               ))}
             </tbody>
           </table>
-          {data.machines.length === 0 ? (
+          {machines.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">
               No machines yet. Enroll a PC, then check the catalog.
             </p>
@@ -220,8 +235,8 @@ export default function SoftwarePage() {
               <button
                 type="button"
                 className="text-muted-foreground hover:text-destructive"
-                onClick={() => void removeSoftware(item.id)}
-                disabled={busy}
+                onClick={() => void runAction(() => removeSoftware(item.id))}
+                disabled={working}
                 aria-label={`Remove ${item.name}`}
               >
                 ×
