@@ -63,7 +63,7 @@ export function FleetView() {
   const [layout, setLayout] = useState<"cards" | "list">(() => {
     try { return localStorage.getItem("fleet-layout") === "cards" ? "cards" : "list"; } catch { return "list"; }
   });
-  const machines = useMemo(() => data.machines.filter((m) => showHistory || m.transport === "mesh" || m.demo), [data.machines, showHistory]);
+  const machines = useMemo(() => data.machines.filter((m) => showHistory || (m.transport === "mesh" && !m.historical) || m.demo), [data.machines, showHistory]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -88,7 +88,7 @@ export function FleetView() {
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const visibleMachines = filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const selectable = visibleMachines.filter((m) => m.transport === "mesh");
+  const selectable = visibleMachines.filter((m) => (m.transport === "mesh" && !m.historical));
 
   const allFilteredSelected =
     selectable.length > 0 && selectable.every((m) => selected.includes(m.id));
@@ -179,7 +179,7 @@ export function FleetView() {
                 : "Try a different search or status filter."}
             </EmptyState>
           ) : (
-            layout === "list" ? <div className="fleet-table-wrap"><table className="fleet-table machine-table"><thead><tr><th><span className="sr-only">Select</span></th><th>Machine / user</th><th>Status</th><th>CPU</th><th>RAM</th><th>GPU</th><th>Drives</th><th><span className="sr-only">Details</span></th></tr></thead><tbody>{visibleMachines.map((m) => <tr key={m.id} className={selected.includes(m.id) ? "bg-primary/5" : ""}><td><Checkbox disabled={m.transport !== "mesh"} aria-label={`Select ${m.hostname}`} checked={selected.includes(m.id)} onCheckedChange={(v) => toggleOne(m.id, Boolean(v))} /></td><td><button className="text-left" onClick={() => setDetailId(m.id)}><strong className="text-foreground">{m.hostname}</strong>{m.id === data.nodeId && <span className="ml-2 text-[10px] text-primary">THIS NODE</span>}<span className="block mt-1 text-xs text-muted-foreground">{m.user || "No user signed in"}</span></button></td><td><span className={cn("fleet-status", `fleet-status-${m.status}`)}><StatusLamp status={m.status} />{m.transport !== "mesh" ? "Historical" : STATUS_LABEL[m.status]}</span></td>{[m.cpu, m.memory, m.gpu].map((value, i) => <td key={i} className={value != null && value >= 90 ? "text-load" : ""}>{m.status === "offline" || value == null ? "—" : `${Math.round(value)}%`}</td>)}<td>{m.mappedDrives.length || "—"}</td><td><button className="text-primary" aria-label={`Details for ${m.hostname}`} onClick={() => setDetailId(m.id)}>Details →</button></td></tr>)}</tbody></table></div> : <div className="fleet-machine-grid">{visibleMachines.map((machine) => (
+            layout === "list" ? <div className="fleet-table-wrap"><table className="fleet-table machine-table"><thead><tr><th><span className="sr-only">Select</span></th><th>Machine / user</th><th>Status</th><th>CPU</th><th>RAM</th><th>GPU</th><th>Drives</th><th><span className="sr-only">Details</span></th></tr></thead><tbody>{visibleMachines.map((m) => <tr key={m.id} className={selected.includes(m.id) ? "bg-primary/5" : ""}><td><Checkbox disabled={(m.transport !== "mesh" || m.historical)} aria-label={`Select ${m.hostname}`} checked={selected.includes(m.id)} onCheckedChange={(v) => toggleOne(m.id, Boolean(v))} /></td><td><button className="text-left" onClick={() => setDetailId(m.id)}><strong className="text-foreground">{m.hostname}</strong>{m.id === data.nodeId && <span className="ml-2 text-[10px] text-primary">THIS NODE</span>}<span className="block mt-1 text-xs text-muted-foreground">{m.user || "No user signed in"}</span></button></td><td><span className={cn("fleet-status", `fleet-status-${m.status}`)}><StatusLamp status={m.status} />{(m.transport !== "mesh" || m.historical) ? "Historical" : STATUS_LABEL[m.status]}</span></td>{[m.cpu, m.memory, m.gpu].map((value, i) => <td key={i} className={value != null && value >= 90 ? "text-load" : ""}>{m.status === "offline" || value == null ? "—" : `${Math.round(value)}%`}</td>)}<td>{m.mappedDrives.length || "—"}</td><td><button className="text-primary" aria-label={`Details for ${m.hostname}`} onClick={() => setDetailId(m.id)}>Details →</button></td></tr>)}</tbody></table></div> : <div className="fleet-machine-grid">{visibleMachines.map((machine) => (
               <MachineCard key={machine.id} machine={machine} checked={selected.includes(machine.id)} onChecked={(v) => toggleOne(machine.id, v)} onDetails={() => setDetailId(machine.id)} />
             ))}</div>
           )}
@@ -270,7 +270,7 @@ function MachineCard({ machine, checked, onChecked, onDetails }: {
         <button onClick={onDetails} className="text-left hover:text-primary"><h3 className="truncate text-base font-semibold tracking-tight" title={machine.hostname}>{machine.hostname}</h3></button>
         <p className="mt-1 truncate text-xs text-muted-foreground">{machine.user || "No user signed in"}</p>
       </div>
-      <Checkbox disabled={machine.transport !== "mesh"} aria-label={`Select ${machine.hostname}`} checked={checked} onCheckedChange={(v) => onChecked(Boolean(v))} />
+      <Checkbox disabled={(machine.transport !== "mesh" || machine.historical)} aria-label={`Select ${machine.hostname}`} checked={checked} onCheckedChange={(v) => onChecked(Boolean(v))} />
     </div>
     <div className="mt-5 flex items-center justify-between gap-2">
       <span className={cn("fleet-status", `fleet-status-${machine.status}`)}><StatusLamp status={machine.status} />{STATUS_LABEL[machine.status]}</span>

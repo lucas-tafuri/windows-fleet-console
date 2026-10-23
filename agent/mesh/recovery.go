@@ -233,6 +233,7 @@ func (n *Node) mergeImports(s *Snapshot) error {
 		for _, m := range a.Machines {
 			id := fmt.Sprint(m["id"])
 			if !machines[id] && bound[id] == "" {
+				m["historical"] = true
 				s.Machines = append(s.Machines, m)
 				machines[id] = true
 			}

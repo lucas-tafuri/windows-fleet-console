@@ -15,7 +15,7 @@ export default function ToolsPage() {
   const [selected, setSelected] = useState<string[]>(() => new URLSearchParams(window.location.search).getAll("machine"));
   const [failure, setFailure] = useState("");
   const [lastJob, setLastJob] = useState<Job | null>(null);
-  const machines = data.machines.filter((m) => m.transport === "mesh");
+  const machines = data.machines.filter((m) => (m.transport === "mesh" && !m.historical));
   const supported = machines.filter((m) => m.status !== "offline" && m.kinds?.includes("diagnostics"));
   const targets = selected.filter((id) => supported.some((m) => m.id === id));
   const report = REPORTS.find((r) => r.id === profile)!;

@@ -141,6 +141,7 @@ export type SoftwareInstall = {
 export type SoftwareStatusMap = Record<string, Record<string, SoftwareInstall>>;
 
 export type MachineView = Machine & {
+  historical?: boolean;
   dashboardUrl?: string;
   legacyId?: string;
   stale?: boolean;

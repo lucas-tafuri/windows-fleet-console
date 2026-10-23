@@ -473,6 +473,11 @@ func TestImportIsRedactedAndNeverExecutable(t *testing.T) {
 	if counts["machines"] != 1 || counts["jobs"] != 1 {
 		t.Fatal(counts)
 	}
+	view := Snapshot{SoftwareStatus: map[string]map[string]any{}}
+	node := Node{Store: s}
+	if err := node.mergeImports(&view); err != nil || len(view.Machines) != 1 || view.Machines[0]["historical"] != true {
+		t.Fatal("imported machine not marked historical", view.Machines, err)
+	}
 	env, err := s.Export(nil, MaxBatch)
 	if err != nil {
 		t.Fatal(err)
