@@ -18,7 +18,8 @@ try {
     & $Go test ./... -count=1 -timeout 180s
     if ($LASTEXITCODE -ne 0) { throw 'Go tests failed' }
     $env:CGO_ENABLED='0'; $env:GOOS='windows'; $env:GOARCH='amd64'
-    & $Go build -trimpath -ldflags "-s -w -X main.meshVersion=$Version" -o ../dist/fleet-node.exe .
+    # The tray shares this executable with the service; never allocate a console.
+    & $Go build -trimpath -ldflags "-s -w -H windowsgui -X main.meshVersion=$Version" -o ../dist/fleet-node.exe .
     if ($LASTEXITCODE -ne 0) { throw 'Node build failed' }
   } finally { Pop-Location }
   Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $root 'dist/fleet-node.exe')

@@ -30,6 +30,8 @@ jobs:
       - name: Validate installer without changing services
         run: node --test tests/mesh-installer.test.mjs
       - run: npm run build:node
+      - name: Verify windowless executable and installer CLI
+        run: node --test tests/mesh-binary.test.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: fleet-mesh-windows-x64
