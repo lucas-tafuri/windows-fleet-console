@@ -132,7 +132,11 @@ try {
   }
   $trayAction = New-ScheduledTaskAction -Execute $binary -Argument ('tray --ui-port ' + $UiPort)
   $trayPrincipal = New-ScheduledTaskPrincipal -GroupId 'S-1-5-32-545' -RunLevel Limited
-  Register-ScheduledTask -TaskName 'PrettyDamnFleet Mesh Tray' -Action $trayAction -Trigger (New-ScheduledTaskTrigger -AtLogOn) -Principal $trayPrincipal -Settings (New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel) -Force | Out-Null
+  # Explorer may not have created the notification area when the logon trigger fires.
+  $trayTrigger = New-ScheduledTaskTrigger -AtLogOn
+  $trayTrigger.Delay = 'PT30S'
+  $traySettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+  Register-ScheduledTask -TaskName 'PrettyDamnFleet Mesh Tray' -Action $trayAction -Trigger $trayTrigger -Principal $trayPrincipal -Settings $traySettings -Force | Out-Null
   Set-Content -LiteralPath (Join-Path $nodeData 'service-installed') -Value $serviceName -Encoding ASCII
   Start-Service -Name $serviceName
   $healthy = $false
