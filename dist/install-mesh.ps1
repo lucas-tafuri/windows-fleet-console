@@ -43,7 +43,9 @@ if ($Mode -eq 'Update' -and !(Test-Path -LiteralPath (Join-Path $nodeData 'mesh.
 # Check the local release before stopping any existing installation.
 $stream = [IO.File]::OpenRead($sourceFile)
 try { if ($stream.ReadByte() -ne 77 -or $stream.ReadByte() -ne 90 -or $stream.Length -lt 1024) { throw 'Source is not a Windows executable' } } finally { $stream.Dispose() }
-& $sourceFile --mesh version
+# A pipeline makes Windows PowerShell wait for the windowless executable and
+# populate LASTEXITCODE before the installer checks its result.
+& $sourceFile --mesh version | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'The source executable did not pass its version check' }
 if ($ReleasePublicKey) { if ([Convert]::FromBase64String($ReleasePublicKey.Trim()).Length -ne 32) { throw 'Publisher key must be a base64 Ed25519 public key' } }
 if ($LegacyData) { $LegacyData = (Resolve-Path -LiteralPath $LegacyData).Path; $null = Get-Content -Raw -LiteralPath $LegacyData | ConvertFrom-Json }
@@ -115,9 +117,9 @@ try {
   $common = @('--data-dir', $nodeData, '--ui-port', "$UiPort", '--peer-port', "$PeerPort", '--discovery-port', "$DiscoveryPort")
   if ($Advertise) { $common += @('--advertise', $Advertise) }
   if ($ReleasePublicKey) { ConvertTo-Json -InputObject @($ReleasePublicKey.Trim()) -Compress | Set-Content -LiteralPath (Join-Path $nodeData 'release-keys.json') -Encoding ASCII }
-  if ($Mode -eq 'Create') { & $binary create @common; if ($LASTEXITCODE -ne 0) { throw 'Fleet creation failed' } }
-  if ($Mode -eq 'Join') { & $binary join @common --peer $Peer --fingerprint $Fingerprint --fleet $Fleet; if ($LASTEXITCODE -ne 0) { throw 'Enrollment failed; saved identity was retained for retry' } }
-  if ($LegacyData) { & $binary import --data-dir $nodeData --input $LegacyData; if ($LASTEXITCODE -ne 0) { throw 'Legacy import failed; source is unchanged' } }
+  if ($Mode -eq 'Create') { & $binary create @common | Out-Host; if ($LASTEXITCODE -ne 0) { throw 'Fleet creation failed' } }
+  if ($Mode -eq 'Join') { & $binary join @common --peer $Peer --fingerprint $Fingerprint --fleet $Fleet | Out-Host; if ($LASTEXITCODE -ne 0) { throw 'Enrollment failed; saved identity was retained for retry' } }
+  if ($LegacyData) { & $binary import --data-dir $nodeData --input $LegacyData | Out-Host; if ($LASTEXITCODE -ne 0) { throw 'Legacy import failed; source is unchanged' } }
   $binPath = '"' + $binary + '" run --service --data-dir "' + $nodeData + '" --ui-port ' + $UiPort + ' --peer-port ' + $PeerPort + ' --discovery-port ' + $DiscoveryPort
   if ($Advertise) { if ($Advertise -notmatch '^[a-zA-Z0-9.:-]+$') { throw 'Invalid advertised address' }; $binPath += ' --advertise ' + $Advertise }
   if ($existingService) { & sc.exe config $serviceName binPath= $binPath start= auto | Out-Null } else { New-Service -Name $serviceName -BinaryPathName $binPath -DisplayName 'PrettyDamnFleet Mesh' -StartupType Automatic -Description 'Local fleet dashboard, peer replication and Windows job executor' | Out-Null }
